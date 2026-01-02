@@ -124,10 +124,17 @@
 
             <!-- Document Type & Meta -->
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="heading-font text-lg font-bold text-slate-800 mb-4 flex items-center">
-                    <i data-lucide="settings" class="w-5 h-5 mr-2 text-blue-500"></i>
-                    Document Settings
-                </h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="heading-font text-lg font-bold text-slate-800 flex items-center mb-0">
+                        <i data-lucide="settings" class="w-5 h-5 mr-2 text-blue-500"></i>
+                        Document Settings
+                    </h2>
+                    <button @click="resetDoc()" title="Reset Document"
+                        class="text-red-500 hover:text-red-700 flex items-center text-xs font-bold transition-colors">
+                        <i data-lucide="rotate-ccw" class="w-3 h-3 mr-1"></i>
+                        RESET
+                    </button>
+                </div>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1">Document Type</label>
@@ -157,10 +164,26 @@
 
             <!-- Customer Details -->
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="heading-font text-lg font-bold text-slate-800 mb-4 flex items-center">
-                    <i data-lucide="user" class="w-5 h-5 mr-2 text-blue-500"></i>
-                    Customer Details
-                </h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="heading-font text-lg font-bold text-slate-800 flex items-center">
+                        <i data-lucide="user" class="w-5 h-5 mr-2 text-blue-500"></i>
+                        Customer Details
+                    </h2>
+                    <button @click="saveToMaster('customer')" title="Save to Master"
+                        class="p-1.5 text-slate-400 hover:text-green-600 transition-colors">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Select from Master</label>
+                    <select @change="selectCustomer($event)"
+                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none">
+                        <option value="">-- Select --</option>
+                        <template x-for="c in masterData.customers" :key="c.name">
+                            <option :value="c.name" x-text="c.name"></option>
+                        </template>
+                    </select>
+                </div>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1">Customer Name</label>
@@ -318,11 +341,17 @@
                         <i data-lucide="list" class="w-5 h-5 mr-2 text-blue-500"></i>
                         Line Items
                     </h2>
-                    <button @click="addItem()"
-                        class="text-blue-600 hover:text-blue-700 flex items-center font-medium text-sm">
-                        <i data-lucide="plus-circle" class="w-4 h-4 mr-1"></i>
-                        Add Item
-                    </button>
+                    <div class="flex items-center space-x-2">
+                        <button @click="saveToMaster('product')" title="Update all to Master"
+                            class="p-1.5 text-slate-400 hover:text-green-600 transition-colors">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                        </button>
+                        <button @click="addItem()"
+                            class="text-blue-600 hover:text-blue-700 flex items-center font-medium text-sm">
+                            <i data-lucide="plus-circle" class="w-4 h-4 mr-1"></i>
+                            Add Item
+                        </button>
+                    </div>
                 </div>
                 <div class="space-y-6">
                     <template x-for="(item, index) in doc.items" :key="index">
@@ -332,9 +361,18 @@
                                 <i data-lucide="x" class="w-3 h-3"></i>
                             </button>
                             <div class="space-y-2">
-                                <input type="text" x-model="item.desc" placeholder="Product name/service"
-                                    class="w-full bg-transparent font-medium text-slate-800 border-b border-slate-200 outline-none focus:border-blue-500 py-1">
-                                <div class="grid grid-cols-3 gap-2">
+                                <div class="flex items-center justify-between space-x-2">
+                                    <input type="text" x-model="item.desc" placeholder="Product name/service"
+                                        class="flex-1 bg-transparent font-medium text-slate-800 border-b border-slate-200 outline-none focus:border-blue-500 py-1">
+                                    <select @change="selectProduct(index, $event)"
+                                        class="w-24 text-[10px] border-none bg-slate-100 rounded px-1 py-0.5 outline-none">
+                                        <option value="">Select...</option>
+                                        <template x-for="p in masterData.products" :key="p.desc">
+                                            <option :value="p.desc" x-text="p.desc"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-4 gap-2">
                                     <div>
                                         <label class="text-[10px] text-slate-500 uppercase">HSN</label>
                                         <input type="text" x-model="item.hsn"
@@ -348,6 +386,11 @@
                                     <div>
                                         <label class="text-[10px] text-slate-500 uppercase">Rate</label>
                                         <input type="number" x-model="item.rate"
+                                            class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                    </div>
+                                    <div x-show="doc.type === 'Quotation'">
+                                        <label class="text-[10px] text-slate-500 uppercase">Disc %</label>
+                                        <input type="number" x-model="item.discount"
                                             class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
                                     </div>
                                 </div>
@@ -609,6 +652,8 @@
                                 <th class="border border-black p-1">HSN / SAC</th>
                                 <th class="border border-black p-1">Qty</th>
                                 <th class="border border-black p-1">Rate</th>
+                                <th class="border border-black p-1" x-show="doc.type === 'Quotation' && hasDiscount()">
+                                    Disc %</th>
                                 <th class="border border-black p-1">Taxable Value</th>
                                 <th class="border border-black p-1" colspan="2">
                                     <div class="border-b border-black" x-text="isInterstate() ? 'IGST' : 'CGST/SGST'">
@@ -626,14 +671,15 @@
                                     <td class="border-x border-black p-1" x-text="item.hsn"></td>
                                     <td class="border-x border-black p-1" x-text="item.qty"></td>
                                     <td class="border-x border-black p-1" x-text="formatCurrency(item.rate)"></td>
-                                    <td class="border-x border-black p-1" x-text="formatCurrency(item.qty * item.rate)">
-                                    </td>
+                                    <td class="border-x border-black p-1" x-text="item.discount || '0'"
+                                        x-show="doc.type === 'Quotation' && hasDiscount()"></td>
+                                    <td class="border-x border-black p-1"
+                                        x-text="formatCurrency(itemTaxableValue(item))"></td>
                                     <td class="border-x border-black p-1" x-text="isInterstate() ? '18.00' : '9%+9%'">
                                     </td>
-                                    <td class="border-x border-black p-1"
-                                        x-text="formatCurrency(item.qty * item.rate * 0.18)"></td>
-                                    <td class="border-x border-black p-1"
-                                        x-text="formatCurrency(item.qty * item.rate * 1.18)"></td>
+                                    <td class="border-x border-black p-1" x-text="formatCurrency(itemTaxAmount(item))">
+                                    </td>
+                                    <td class="border-x border-black p-1" x-text="formatCurrency(itemTotal(item))"></td>
                                 </tr>
                             </template>
                         </tbody>
@@ -642,6 +688,7 @@
                                 <td colspan="3" class="text-right p-1">Total</td>
                                 <td x-text="totalQty()"></td>
                                 <td class="bg-gray-200"></td>
+                                <td class="bg-gray-200" x-show="doc.type === 'Quotation' && hasDiscount()"></td>
                                 <td x-text="formatCurrency(subTotal())"></td>
                                 <td class="bg-gray-200"></td>
                                 <td x-text="formatCurrency(taxAmount())"></td>
@@ -701,6 +748,10 @@
                                 <tr class="border-b border-black">
                                     <td class="p-1 text-left font-bold">Total Tax</td>
                                     <td class="p-1" x-text="formatCurrency(taxAmount())"></td>
+                                </tr>
+                                <tr class="border-b border-black" x-show="Math.abs(roundOff()) > 0.01">
+                                    <td class="p-1 text-left font-bold">Round Off</td>
+                                    <td class="p-1" x-text="formatCurrency(roundOff())"></td>
                                 </tr>
                                 <tr class="border-b border-black bg-slate-100">
                                     <td class="p-1 text-left font-bold text-lg">Total Amount</td>
@@ -779,7 +830,7 @@
                         pan: ''
                     },
                     items: [
-                        { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000 }
+                        { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0 }
                     ],
                     bank: {
                         name: 'LAGA SYSTEMS PVT LTD',
@@ -793,8 +844,19 @@
                     ]
                 },
 
+                masterData: {
+                    customers: [
+                        { name: 'Client A', address: '123 Street, City', gstin: '36ABCDE1234F1Z1', state: 'Telangana', pan: 'ABCDE1234F' },
+                        { name: 'Client B', address: '456 Avenue, Town', gstin: '27FGHIJ5678K2Z2', state: 'Maharashtra', pan: 'FGHIJ5678K' }
+                    ],
+                    products: [
+                        { desc: 'AERMOD View Software', hsn: '997331', rate: 150000 },
+                        { desc: 'Maintenance Service', hsn: '998711', rate: 25000 }
+                    ]
+                },
+
                 addItem() {
-                    this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0 });
+                    this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0 });
                     this.$nextTick(() => lucide.createIcons());
                 },
 
@@ -810,8 +872,101 @@
                     this.doc.tnc.splice(index, 1);
                 },
 
+                selectCustomer(e) {
+                    const selected = this.masterData.customers.find(c => c.name === e.target.value);
+                    if (selected) {
+                        this.doc.customer = { ...selected };
+                    }
+                },
+
+                selectProduct(index, e) {
+                    const selected = this.masterData.products.find(p => p.desc === e.target.value);
+                    if (selected) {
+                        this.doc.items[index].desc = selected.desc;
+                        this.doc.items[index].hsn = selected.hsn;
+                        this.doc.items[index].rate = selected.rate;
+                    }
+                },
+
+                saveToMaster(type) {
+                    if (type === 'customer') {
+                        const exists = this.masterData.customers.findIndex(c => c.name === this.doc.customer.name);
+                        if (exists >= 0) {
+                            this.masterData.customers[exists] = { ...this.doc.customer };
+                        } else {
+                            this.masterData.customers.push({ ...this.doc.customer });
+                        }
+                    } else if (type === 'product') {
+                        this.doc.items.forEach(item => {
+                            if (item.desc) {
+                                const exists = this.masterData.products.findIndex(p => p.desc === item.desc);
+                                if (exists >= 0) {
+                                    this.masterData.products[exists] = { desc: item.desc, hsn: item.hsn, rate: item.rate };
+                                } else {
+                                    this.masterData.products.push({ desc: item.desc, hsn: item.hsn, rate: item.rate });
+                                }
+                            }
+                        });
+                    }
+                    this.saveMasterData();
+                    alert(`${type.charAt(0).toUpperCase() + type.slice(1)} saved to Master Data!`);
+                },
+
+                saveMasterData() {
+                    localStorage.setItem('laga_master_data', JSON.stringify(this.masterData));
+                },
+
+                loadMasterData() {
+                    const saved = localStorage.getItem('laga_master_data');
+                    if (saved) {
+                        this.masterData = JSON.parse(saved);
+                    }
+                },
+
+                saveCurrentDoc() {
+                    localStorage.setItem('laga_current_doc', JSON.stringify(this.doc));
+                },
+
+                loadCurrentDoc() {
+                    const saved = localStorage.getItem('laga_current_doc');
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            // Merge with default to ensure new fields are present
+                            this.doc = { ...this.doc, ...parsed };
+                        } catch (e) {
+                            console.error("Failed to load current doc", e);
+                        }
+                    }
+                },
+
+                resetDoc() {
+                    if (confirm('Are you sure you want to clear this document and start fresh?')) {
+                        localStorage.removeItem('laga_current_doc');
+                        location.reload();
+                    }
+                },
+
+                itemTaxableValue(item) {
+                    const amount = (Number(item.qty) * Number(item.rate));
+                    const discountAmt = (this.doc.type === 'Quotation') ? amount * (Number(item.discount || 0) / 100) : 0;
+                    return amount - discountAmt;
+                },
+
+                itemTaxAmount(item) {
+                    return this.itemTaxableValue(item) * 0.18;
+                },
+
+                itemTotal(item) {
+                    return this.itemTaxableValue(item) + this.itemTaxAmount(item);
+                },
+
+                hasDiscount() {
+                    return this.doc.items.some(item => Number(item.discount) > 0);
+                },
+
                 subTotal() {
-                    return this.doc.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
+                    return this.doc.items.reduce((sum, item) => sum + this.itemTaxableValue(item), 0);
                 },
 
                 isInterstate() {
@@ -835,8 +990,16 @@
                     return this.cgstAmount() + this.sgstAmount() + this.igstAmount();
                 },
 
-                grandTotal() {
+                grandTotalRaw() {
                     return this.subTotal() + this.taxAmount();
+                },
+
+                roundOff() {
+                    return Math.round(this.grandTotalRaw()) - this.grandTotalRaw();
+                },
+
+                grandTotal() {
+                    return Math.round(this.grandTotalRaw());
                 },
 
                 totalQty() {
@@ -894,6 +1057,13 @@
 
                 init() {
                     lucide.createIcons();
+                    this.loadMasterData();
+                    this.loadCurrentDoc();
+
+                    // Watch for any change in doc and auto-save
+                    this.$watch('doc', () => {
+                        this.saveCurrentDoc();
+                    }, { deep: true });
 
                     // Add watcher for dynamic document numbering
                     this.$watch('doc.type', (value) => {
