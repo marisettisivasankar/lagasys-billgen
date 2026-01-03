@@ -138,23 +138,39 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1">Document Type</label>
-                        <select x-model="doc.type"
+                        <select x-model="doc.type" @change="
+                                let prefix = 'LGS-QTN'; 
+                                if(doc.type==='Proforma Invoice') prefix='LGS-PI'; 
+                                if(doc.type==='Tax Invoice') prefix='LGS-TI'; 
+                                if(doc.type==='Delivery Challan') {
+                                    prefix='LGS-DC';
+                                    doc.tnc = ['Subject to Hyderabad Jurisdiction.'];
+                                } else {
+                                    doc.tnc = [
+                                        'Subject to Hyderabad Jurisdiction.',
+                                        'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
+                                        'The above price doesn\'t include Installation and Training.'
+                                    ];
+                                }
+                                doc.number = `${prefix}-2026-001`
+                            "
                             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="Quotation">Quotation</option>
                             <option value="Proforma Invoice">Proforma Invoice</option>
                             <option value="Tax Invoice">Tax Invoice</option>
+                            <option value="Delivery Challan">Delivery Challan</option>
                         </select>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1"
-                                x-text="doc.type === 'Quotation' ? 'Quotation No.' : (doc.type === 'Proforma Invoice' ? 'Proforma No.' : 'Tax Invoice No.')"></label>
+                                x-text="doc.type === 'Quotation' ? 'Quotation No.' : (doc.type === 'Proforma Invoice' ? 'Proforma No.' : (doc.type === 'Tax Invoice' ? 'Invoice No.' : 'Challan No.'))"></label>
                             <input type="text" x-model="doc.number"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1"
-                                x-text="doc.type === 'Quotation' ? 'Quotation Date' : (doc.type === 'Proforma Invoice' ? 'Proforma Date' : 'Tax Invoice Date')"></label>
+                                x-text="doc.type === 'Quotation' ? 'Quotation Date' : (doc.type === 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))"></label>
                             <input type="date" x-model="doc.date"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
@@ -311,6 +327,24 @@
                             </div>
                         </div>
                     </template>
+                    <template x-if="doc.type === 'Delivery Challan'">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">Purchase Order / Contract
+                                    No</label>
+                                <input type="text" x-model="doc.poNumber"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">Purchase Order
+                                        Date</label>
+                                    <input type="date" x-model="doc.poDate"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
 
@@ -401,7 +435,8 @@
             </div>
 
             <!-- Bank Details -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div x-show="doc.type !== 'Delivery Challan'"
+                class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h2 class="heading-font text-lg font-bold text-slate-800 mb-4 flex items-center">
                     <i data-lucide="building-2" class="w-5 h-5 mr-2 text-blue-500"></i>
                     Bank Details
@@ -556,13 +591,13 @@
                         <div class="grid grid-cols-2">
                             <div class="p-1 border-r border-b border-black">
                                 <p class="font-medium text-[9px] text-slate-500"
-                                    x-text="doc.type == 'Quotation' ? 'Quotation No.' : (doc.type == 'Proforma Invoice' ? 'Proforma No.' : 'Tax Invoice No.')">
+                                    x-text="doc.type == 'Quotation' ? 'Quotation No.' : (doc.type == 'Proforma Invoice' ? 'Proforma No.' : (doc.type === 'Tax Invoice' ? 'Invoice No.' : 'Challan No.'))">
                                 </p>
                                 <p class="font-bold" x-text="doc.number"></p>
                             </div>
                             <div class="p-1 border-b border-black">
                                 <p class="font-medium text-[9px] text-slate-500"
-                                    x-text="doc.type == 'Quotation' ? 'Quotation Date' : (doc.type == 'Proforma Invoice' ? 'Proforma Date' : 'Tax Invoice Date')">
+                                    x-text="doc.type == 'Quotation' ? 'Quotation Date' : (doc.type == 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))">
                                 </p>
                                 <p class="font-bold" x-text="doc.date"></p>
                             </div>
@@ -588,7 +623,7 @@
                                     </div>
                                 </div>
                             </template>
-                            <template x-if="doc.type === 'Proforma Invoice'">
+                            <template x-if="['Proforma Invoice', 'Tax Invoice', 'Delivery Challan'].includes(doc.type)">
                                 <div class="contents">
                                     <div class="p-1 border-r border-b border-black">
                                         <p class="font-medium text-[9px] text-slate-500">Purchase Order / Contract No
@@ -599,30 +634,11 @@
                                         <p class="font-medium text-[9px] text-slate-500">Purchase Order Date</p>
                                         <p class="font-bold" x-text="doc.poDate || '-'"></p>
                                     </div>
-                                    <div class="p-1 border-r border-black">
+                                    <div class="p-1 border-r border-black" x-show="doc.type !== 'Delivery Challan'">
                                         <p class="font-medium text-[9px] text-slate-500">Due Date</p>
                                         <p class="font-bold" x-text="doc.dueDate || '-'"></p>
                                     </div>
-                                    <div class="p-1">
-                                    </div>
-                                </div>
-                            </template>
-                            <template x-if="doc.type === 'Tax Invoice'">
-                                <div class="contents">
-                                    <div class="p-1 border-r border-b border-black">
-                                        <p class="font-medium text-[9px] text-slate-500">Purchase Order / Contract No
-                                        </p>
-                                        <p class="font-bold" x-text="doc.poNumber || '-'"></p>
-                                    </div>
-                                    <div class="p-1 border-b border-black">
-                                        <p class="font-medium text-[9px] text-slate-500">Purchase Order Date</p>
-                                        <p class="font-bold" x-text="doc.poDate || '-'"></p>
-                                    </div>
-                                    <div class="p-1 border-r border-black">
-                                        <p class="font-medium text-[9px] text-slate-500">Due Date</p>
-                                        <p class="font-bold" x-text="doc.dueDate || '-'"></p>
-                                    </div>
-                                    <div class="p-1">
+                                    <div class="p-1" x-show="doc.type !== 'Delivery Challan'">
                                     </div>
                                 </div>
                             </template>
@@ -706,19 +722,22 @@
                                 x-text="numberToWords(grandTotal())">
                                 FOUR THOUSAND FOUR HUNDRED AND NINETY RUPEES ONLY
                             </div>
-                            <div class="p-1 border-t border-black text-center font-bold bg-slate-50 text-[10px]">Bank
-                                Details</div>
-                            <div class="p-2 text-[10px] grid grid-cols-2 gap-y-1">
-                                <div class="font-bold">Name</div>
-                                <div x-text="doc.bank.name"></div>
-                                <div class="font-bold">Acc. Number</div>
-                                <div x-text="doc.bank.acc"></div>
-                                <div class="font-bold">Bank</div>
-                                <div x-text="doc.bank.bankName"></div>
-                                <div class="font-bold">Branch</div>
-                                <div x-text="doc.bank.branch"></div>
-                                <div class="font-bold">IFSC Code</div>
-                                <div x-text="doc.bank.ifsc"></div>
+                            <div x-show="doc.type !== 'Delivery Challan'" class="contents">
+                                <div class="p-1 border-t border-black text-center font-bold bg-slate-50 text-[10px]">
+                                    Bank
+                                    Details</div>
+                                <div class="p-2 text-[10px] grid grid-cols-2 gap-y-1">
+                                    <div class="font-bold">Name</div>
+                                    <div x-text="doc.bank.name"></div>
+                                    <div class="font-bold">Acc. Number</div>
+                                    <div x-text="doc.bank.acc"></div>
+                                    <div class="font-bold">Bank</div>
+                                    <div x-text="doc.bank.bankName"></div>
+                                    <div class="font-bold">Branch</div>
+                                    <div x-text="doc.bank.branch"></div>
+                                    <div class="font-bold">IFSC Code</div>
+                                    <div x-text="doc.bank.ifsc"></div>
+                                </div>
                             </div>
                         </div>
                         <div>
@@ -967,12 +986,16 @@
                             { desc: '', hsn: '', qty: 1, rate: 0, discount: 0 }
                         ];
 
-                        // Set standard terms
-                        this.doc.tnc = [
-                            'Subject to Hyderabad Jurisdiction.',
-                            'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
-                            'The above price doesn\'t include Installation and Training.'
-                        ];
+                        // Set standard terms based on type
+                        if (this.doc.type === 'Delivery Challan') {
+                            this.doc.tnc = ['Subject to Hyderabad Jurisdiction.'];
+                        } else {
+                            this.doc.tnc = [
+                                'Subject to Hyderabad Jurisdiction.',
+                                'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
+                                'The above price doesn\'t include Installation and Training.'
+                            ];
+                        }
 
                         // Force save current session as blank
                         this.saveCurrentDoc();
@@ -983,6 +1006,7 @@
                             let prefix = 'LGS-QTN';
                             if (value === 'Proforma Invoice') prefix = 'LGS-PI';
                             if (value === 'Tax Invoice') prefix = 'LGS-TI';
+                            if (value === 'Delivery Challan') prefix = 'LGS-DC';
                             this.doc.number = `${prefix}-2026-001`;
                             this.saveCurrentDoc();
                         });
