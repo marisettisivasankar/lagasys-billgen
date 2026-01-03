@@ -151,7 +151,6 @@
                                 x-text="doc.type === 'Quotation' ? 'Quotation No.' : (doc.type === 'Proforma Invoice' ? 'Proforma No.' : 'Tax Invoice No.')"></label>
                             <input type="text" x-model="doc.number"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
-                            div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1"
@@ -943,8 +942,41 @@
 
                 resetDoc() {
                     if (confirm('Are you sure you want to clear this document and start fresh?')) {
-                        localStorage.removeItem('laga_current_doc');
-                        location.reload();
+                        // Reset everything to empty for a "blank" document
+                        this.doc.number = '';
+                        this.doc.date = new Date().toISOString().split('T')[0];
+                        this.doc.validityDate = '';
+                        this.doc.paymentTerms = '';
+                        this.doc.deliveryTime = '';
+                        this.doc.deliveryMode = '';
+                        this.doc.subject = '';
+                        this.doc.reference = '';
+                        this.doc.poNumber = '';
+                        this.doc.poDate = '';
+                        this.doc.dueDate = '';
+                        this.doc.customer = {
+                            name: '',
+                            address: '',
+                            gstin: '',
+                            state: '',
+                            pan: ''
+                        };
+                        this.doc.items = [
+                            { desc: '', hsn: '', qty: 1, rate: 0, discount: 0 }
+                        ];
+
+                        // Force save current session as blank
+                        this.saveCurrentDoc();
+
+                        // Set the document number to the first one based on type
+                        this.$nextTick(() => {
+                            const value = this.doc.type;
+                            let prefix = 'LGS-QTN';
+                            if (value === 'Proforma Invoice') prefix = 'LGS-PI';
+                            if (value === 'Tax Invoice') prefix = 'LGS-TI';
+                            this.doc.number = `${prefix}-2026-001`;
+                            this.saveCurrentDoc();
+                        });
                     }
                 },
 
