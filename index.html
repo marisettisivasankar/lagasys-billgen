@@ -24,7 +24,7 @@
         @media print {
             @page {
                 size: A4;
-                margin: 1cm;
+                margin: 0;
             }
 
             .no-print {
@@ -472,7 +472,7 @@
         <!-- Preview Section -->
         <div class="lg:w-2/3">
             <div id="document-preview" class="bg-white shadow-2xl mx-auto print-area overflow-hidden"
-                style="width: 210mm; min-height: 297mm; padding: 10mm; box-sizing: border-box;">
+                style="width: 210mm; min-height: 296mm; padding: 10mm; box-sizing: border-box; margin-bottom: 0;">
 
                 <!-- Template from Image recreation starts here -->
                 <div class="relative h-full text-[12px] leading-tight text-slate-900 border border-black p-4">
@@ -1058,15 +1058,17 @@
                         }
 
                         const opt = {
-                            margin: 0,
+                            margin: [0, 0, 0, 0], // Strict no margin
                             filename: fileName,
-                            image: { type: 'jpeg', quality: 0.98 },
+                            image: { type: 'jpeg', quality: 1.0 },
                             html2canvas: {
                                 scale: 2,
                                 useCORS: true,
-                                letterRendering: true
+                                letterRendering: true,
+                                scrollY: 0
                             },
-                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
                         };
 
                         await html2pdf().set(opt).from(element).save();
