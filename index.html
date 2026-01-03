@@ -786,9 +786,9 @@
                     <!-- Footer T&C -->
                     <div class="border border-black border-t-0 p-2 text-[9px]">
                         <p class="font-bold uppercase mb-1">Terms and Conditions</p>
-                        <ol class="list-decimal list-inside space-y-0.5">
+                        <ol class="list-decimal ml-5 space-y-1">
                             <template x-for="point in doc.tnc">
-                                <li x-text="point"></li>
+                                <li class="pl-1" x-text="point"></li>
                             </template>
                         </ol>
                     </div>
@@ -840,7 +840,9 @@
                         ifsc: 'UTIB0000008'
                     },
                     tnc: [
-                        'Subject to Hyderabad Jurisdiction.'
+                        'Subject to Hyderabad Jurisdiction.',
+                        'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
+                        'The above price doesn\'t include Installation and Training.'
                     ]
                 },
 
@@ -963,6 +965,13 @@
                         };
                         this.doc.items = [
                             { desc: '', hsn: '', qty: 1, rate: 0, discount: 0 }
+                        ];
+
+                        // Set standard terms
+                        this.doc.tnc = [
+                            'Subject to Hyderabad Jurisdiction.',
+                            'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
+                            'The above price doesn\'t include Installation and Training.'
                         ];
 
                         // Force save current session as blank
