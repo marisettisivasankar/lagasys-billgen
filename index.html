@@ -86,6 +86,19 @@
                 <span class="heading-font font-bold text-xl text-slate-900">BillGen</span>
             </div>
             <div class="flex items-center space-x-4">
+                <button @click="showHistory = true"
+                    class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
+                    <i data-lucide="history" class="w-4 h-4 mr-1"></i>
+                    History
+                </button>
+                <div class="h-6 w-px bg-slate-200"></div>
+                <button @click="saveDocToHistory()"
+                    class="text-slate-600 hover:text-green-600 font-medium text-sm transition-colors flex items-center"
+                    title="Save to History">
+                    <i data-lucide="save" class="w-4 h-4 mr-1"></i>
+                    Save Draft
+                </button>
+
                 <button @click="savePDF()" :disabled="isSaving"
                     class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg transition-all font-bold shadow-lg shadow-blue-200 min-w-[160px] justify-center">
                     <template x-if="!isSaving">
@@ -116,6 +129,75 @@
             </div>
         </div>
     </nav>
+
+    <!-- History Modal -->
+    <div x-show="showHistory" style="display: none;"
+        class="fixed inset-0 z-[100] flex items-center justify-end bg-black/50 backdrop-blur-sm transition-all"
+        x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+
+        <div class="w-full max-w-md h-full bg-white shadow-2xl flex flex-col transform transition-transform"
+            @click.away="showHistory = false" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
+            x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0"
+            x-transition:leave-end="translate-x-full">
+
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                    <i data-lucide="history" class="w-5 h-5 mr-2 text-blue-600"></i>
+                    Saved Documents
+                </h2>
+                <button @click="showHistory = false" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+                <template x-if="savedDocs.length === 0">
+                    <div class="text-center py-10 text-slate-400">
+                        <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                        <p>No saved documents found.</p>
+                    </div>
+                </template>
+
+                <template x-for="(d, index) in savedDocs" :key="index">
+                    <div
+                        class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group relative">
+                        <!-- Delete Button -->
+                        <button @click.stop="deleteHistoryDoc(index)"
+                            class="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Delete Record">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+
+                        <div @click="loadHistoryDoc(index)" class="cursor-pointer">
+                            <div class="flex items-center justify-between mb-2 pr-8">
+                                <span
+                                    class="text-xs font-bold px-2 py-0.5 rounded text-blue-700 bg-blue-50 border border-blue-100 uppercase tracking-tighter"
+                                    x-text="d.type"></span>
+                                <span class="text-[10px] text-slate-400 font-medium"
+                                    x-text="new Date(d.savedAt).toLocaleDateString()"></span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 mb-1" x-text="d.number || 'Untitled'"></h3>
+                            <p class="text-sm text-slate-600 truncate mb-2" x-text="d.customer.name || 'No Customer'">
+                            </p>
+
+                            <div class="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
+                                <span class="text-xs font-bold text-slate-500">Total:</span>
+                                <span class="font-black text-slate-800"
+                                    x-text="'₹ ' + Number(d.items.reduce((sum, i) => {
+                                        const taxable = (i.qty*i.rate) - ((d.type==='Quotation' ? (i.qty*i.rate*(i.discount||0)/100) : 0));
+                                        const rate = (i.taxRate !== undefined) ? i.taxRate : (d.taxRate !== undefined ? d.taxRate : 18);
+                                        return sum + taxable + (taxable * (rate/100));
+                                    }, 0)).toLocaleString('en-IN', {maximumFractionDigits:0})"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
 
     <main class="max-w-[1400px] mx-auto px-4 py-6">
         <!-- Document Type Buttons -->
@@ -179,7 +261,7 @@
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
                         </div>
-                    </div>
+                    </div> 
                 </div>
 
                 <!-- Customer Details -->
@@ -194,16 +276,40 @@
                             <i data-lucide="save" class="w-4 h-4"></i>
                         </button>
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Select from
-                            Master</label>
-                        <select @change="selectCustomer($event)"
-                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none">
-                            <option value="">-- Select --</option>
-                            <template x-for="c in masterData.customers" :key="c.name">
-                                <option :value="c.name" x-text="c.name"></option>
+                    <div class="mb-4 relative" x-data="{ open: false, query: '' }">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Search Saved
+                            Customers</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
+                            </div>
+                            <input type="text" x-model="query" @focus="open = true" @click.away="open = false"
+                                placeholder="Type to search..."
+                                class="w-full border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 transition-all">
+                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Items -->
+                        <div x-show="open" style="display: none;"
+                            class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-auto">
+                            <template
+                                x-if="masterData.customers.filter(c => c.name.toLowerCase().includes(query.toLowerCase())).length === 0">
+                                <div class="px-4 py-3 text-sm text-slate-500 italic text-center">No customers found.
+                                </div>
                             </template>
-                        </select>
+                            <template
+                                x-for="c in masterData.customers.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))"
+                                :key="c.name">
+                                <div @click="selectCustomerObj(c); open = false; query = ''"
+                                    class="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 group">
+                                    <div class="font-bold text-slate-800 text-sm group-hover:text-blue-700"
+                                        x-text="c.name"></div>
+                                    <div class="text-[10px] text-slate-500 truncate" x-text="c.address"></div>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                     <div class="space-y-4">
                         <div>
@@ -407,18 +513,41 @@
                                     <i data-lucide="x" class="w-3 h-3"></i>
                                 </button>
                                 <div class="space-y-2">
-                                    <div class="flex items-center justify-between space-x-2">
-                                        <input type="text" x-model="item.desc" placeholder="Product name/service"
-                                            class="flex-1 bg-transparent font-medium text-slate-800 border-b border-slate-200 outline-none focus:border-blue-500 py-1">
-                                        <select @change="selectProduct(index, $event)"
-                                            class="w-24 text-[10px] border-none bg-slate-100 rounded px-1 py-0.5 outline-none">
-                                            <option value="">Select...</option>
-                                            <template x-for="p in masterData.products" :key="p.desc">
-                                                <option :value="p.desc" x-text="p.desc"></option>
-                                            </template>
-                                        </select>
+                                    <div class="flex items-center justify-between space-x-2 relative"
+                                        x-data="{ open: false }">
+                                        <div class="flex-1 relative">
+                                            <input type="text" x-model="item.desc"
+                                                placeholder="Product name / Service (Type to search)"
+                                                @focus="open = true" @click.away="open = false" @input="open = true"
+                                                class="w-full bg-transparent font-medium text-slate-800 border-b border-slate-200 outline-none focus:border-blue-500 py-1"
+                                                autocomplete="off">
+
+                                            <!-- Autosuggest Dropdown -->
+                                            <div x-show="open" style="display: none;"
+                                                class="absolute z-20 left-0 mt-1 w-full bg-white shadow-xl rounded-lg border border-slate-100 max-h-48 overflow-auto min-w-[200px]">
+                                                <template
+                                                    x-for="p in masterData.products.filter(p => p.desc.toLowerCase().includes((item.desc || '').toLowerCase()))"
+                                                    :key="p.desc">
+                                                    <div @click="selectProductObj(index, p); open = false"
+                                                        class="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                                        <div class="font-bold text-slate-700 text-sm" x-text="p.desc">
+                                                        </div>
+                                                        <div
+                                                            class="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                                                            <span x-text="'HSN: ' + p.hsn"></span>
+                                                            <span class="font-mono text-slate-600"
+                                                                x-text="'₹' + p.rate"></span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <div x-show="masterData.products.filter(p => p.desc.toLowerCase().includes((item.desc || '').toLowerCase())).length === 0"
+                                                    class="p-2 text-[10px] text-slate-400 italic text-center">
+                                                    No matches found
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="grid grid-cols-4 gap-2">
+                                    <div class="grid grid-cols-5 gap-2">
                                         <div>
                                             <label class="text-[10px] text-slate-500 uppercase">HSN</label>
                                             <input type="text" x-model="item.hsn"
@@ -433,6 +562,15 @@
                                             <label class="text-[10px] text-slate-500 uppercase">Rate</label>
                                             <input type="number" x-model="item.rate"
                                                 class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="text-[10px] text-slate-500 uppercase">Tax %</label>
+                                            <select x-model.number="item.taxRate" class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                <option value="0">0%</option>
+                                                <option value="5">5%</option>
+                                                <option value="18">18%</option>
+                                                <option value="40">40%</option>
+                                            </select>
                                         </div>
                                         <div x-show="doc.type === 'Quotation'">
                                             <label class="text-[10px] text-slate-500 uppercase">Disc %</label>
@@ -517,8 +655,8 @@
             </div>
 
             <!-- Preview Section -->
-            <div class="lg:w-2/3">
-                <div id="document-preview" class="bg-white shadow-2xl mx-auto print-area overflow-hidden"
+            <div class="lg:w-2/3 overflow-y-auto lg:max-h-[calc(100vh-140px)] max-h-[calc(100vh-140px)] pr-2 no-print">
+                <div id="document-preview" class="bg-white shadow-2xl mx-auto print-area overflow-visible"
                     style="width: 210mm; min-height: 296mm; padding: 10mm; box-sizing: border-box; margin-bottom: 0;">
 
                     <!-- Template from Image recreation starts here -->
@@ -575,7 +713,7 @@
                                 <div>PAN No: AABCL2941H</div>
                             </div>
                             <div class="p-1 border-r border-black text-center font-bold text-base uppercase"
-                                x-text="doc.type">TAX INVOICE</div>
+                                x-text="doc.customTitle || doc.type">TAX INVOICE</div>
                             <div class="p-1 text-[10px] font-bold text-center">ORIGINAL FOR RECIPIENT</div>
                         </div>
 
@@ -703,7 +841,7 @@
                             </thead>
                             <tbody>
                                 <template x-for="(item, index) in doc.items">
-                                    <tr>
+                                    <tr class="border-b border-black">
                                         <td class="border-x border-black p-1" x-text="index + 1"></td>
                                         <td class="border-x border-black p-1 text-left" x-text="item.desc"></td>
                                         <td class="border-x border-black p-1" x-text="item.hsn"></td>
@@ -714,7 +852,7 @@
                                         <td class="border-x border-black p-1"
                                             x-text="formatCurrency(itemTaxableValue(item))"></td>
                                         <td class="border-x border-black p-1"
-                                            x-text="isInterstate() ? '18.00' : '9%+9%'">
+                                            x-text="isInterstate() ? formatPercent((item.taxRate !== undefined) ? item.taxRate : (doc.taxRate || 18)) : formatSplitPercent((item.taxRate !== undefined) ? item.taxRate : (doc.taxRate || 18))">
                                         </td>
                                         <td class="border-x border-black p-1"
                                             x-text="formatCurrency(itemTaxAmount(item))">
@@ -775,22 +913,22 @@
                                     </tr>
                                     <template x-if="isInterstate()">
                                         <tr class="border-b border-black">
-                                            <td class="p-1 text-left font-bold">Add : IGST (18%)</td>
+                                            <td class="p-1 text-left font-bold" x-text="summaryTaxRate() !== null ? ('Add : IGST (' + formatPercent(summaryTaxRate()) + ')') : 'Add : IGST (Varied)'"></td>
                                             <td class="p-1" x-text="formatCurrency(igstAmount())"></td>
                                         </tr>
                                     </template>
                                     <template x-if="!isInterstate()">
                                         <tr class="border-b border-black">
-                                            <td class="p-1 text-left font-bold">Add : CGST (9%)</td>
+                                            <td class="p-1 text-left font-bold" x-text="summaryTaxRate() !== null ? ('Add : CGST (' + formatPercent(summaryTaxRate()/2) + ')') : 'Add : CGST (Varied)'"></td>
                                             <td class="p-1" x-text="formatCurrency(cgstAmount())"></td>
                                         </tr>
                                     </template>
                                     <template x-if="!isInterstate()">
                                         <tr class="border-b border-black">
-                                            <td class="p-1 text-left font-bold">Add : SGST (9%)</td>
+                                            <td class="p-1 text-left font-bold" x-text="summaryTaxRate() !== null ? ('Add : SGST (' + formatPercent(summaryTaxRate()/2) + ')') : 'Add : SGST (Varied)'"></td>
                                             <td class="p-1" x-text="formatCurrency(sgstAmount())"></td>
                                         </tr>
-                                    </template>
+                                    </template> 
                                     <tr class="border-b border-black">
                                         <td class="p-1 text-left font-bold">Total Tax</td>
                                         <td class="p-1" x-text="formatCurrency(taxAmount())"></td>
@@ -857,6 +995,7 @@
                 isSaving: false,
                 doc: {
                     type: 'Quotation',
+                    customTitle: '',
                     number: 'LGS-QTN-2026-001',
                     date: new Date().toISOString().split('T')[0],
                     validityDate: '',
@@ -880,7 +1019,7 @@
                         pan: ''
                     },
                     items: [
-                        { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0 }
+                        { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0, taxRate: 18 }
                     ],
                     bank: {
                         name: 'LAGA SYSTEMS PVT LTD',
@@ -893,7 +1032,9 @@
                         'Subject to Hyderabad Jurisdiction.',
                         'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
                         'The above price doesn\'t include Installation and Training.'
-                    ]
+                    ],
+                    // Tax rate (percent) used for IGST / CGST / SGST calculations. Default: 18%
+                    taxRate: 18
                 },
 
                 masterData: {
@@ -902,15 +1043,29 @@
                         { name: 'Client B', address: '456 Avenue, Town', gstin: '27FGHIJ5678K2Z2', state: 'Maharashtra', pan: 'FGHIJ5678K' }
                     ],
                     products: [
-                        { desc: 'AERMOD View Software', hsn: '997331', rate: 150000 },
-                        { desc: 'Maintenance Service', hsn: '998711', rate: 25000 }
+                        { desc: 'AERMOD View Software', hsn: '997331', rate: 150000, taxRate: 18 },
+                        { desc: 'Maintenance Service', hsn: '998711', rate: 25000, taxRate: 18 }
                     ]
                 },
 
+                // Allowed GST slabs (after Sep 22, 2025): 0%, 5%, 18%, 40%
+                allowedTaxSlabs: [0, 5, 18, 40],
+
+                // Normalize tax rate value to the nearest allowed slab (returns number)
+                normalizeTaxRate(val) {
+                    const slabs = (this.allowedTaxSlabs || [0,5,18,40]).map(Number);
+                    let n = Number(val);
+                    if (!isFinite(n)) return 18; // default
+                    // Find nearest slab
+                    return slabs.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a));
+                },
+
+
                 addItem() {
-                    this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0 });
+                    this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate || 18) });
                     this.$nextTick(() => lucide.createIcons());
                 },
+
 
                 removeItem(index) {
                     this.doc.items.splice(index, 1);
@@ -923,6 +1078,19 @@
                 removeTnc(index) {
                     this.doc.tnc.splice(index, 1);
                 },
+
+                selectCustomerObj(c) {
+                    this.doc.customer = { ...c };
+                },
+
+                selectProductObj(index, p) {
+                    this.doc.items[index].desc = p.desc;
+                    this.doc.items[index].hsn = p.hsn;
+                    this.doc.items[index].rate = p.rate;
+                    // If product defines a taxRate, use it for the specific item; otherwise fallback to document taxRate
+                    this.doc.items[index].taxRate = this.normalizeTaxRate((p.taxRate !== undefined) ? p.taxRate : (this.doc.taxRate || 18));
+                },
+
 
                 selectCustomer(e) {
                     const selected = this.masterData.customers.find(c => c.name === e.target.value);
@@ -942,6 +1110,7 @@
 
                 setDocType(type) {
                     this.doc.type = type;
+                    this.doc.customTitle = ''; // Reset custom title on type switch
                     let prefix = 'LGS-QTN';
                     if (type === 'Proforma Invoice') prefix = 'LGS-PI';
                     if (type === 'Tax Invoice') prefix = 'LGS-TI';
@@ -998,6 +1167,62 @@
                     localStorage.setItem('laga_current_doc', JSON.stringify(this.doc));
                 },
 
+                // --- History / Saved Docs Logic ---
+                savedDocs: [],
+                showHistory: false,
+
+                loadHistory() {
+                    const saved = localStorage.getItem('laga_saved_docs');
+                    if (saved) {
+                        try {
+                            this.savedDocs = JSON.parse(saved);
+                        } catch (e) {
+                            console.error("Failed to load history", e);
+                            this.savedDocs = [];
+                        }
+                    }
+                },
+
+                saveHistoryToStorage() {
+                    localStorage.setItem('laga_saved_docs', JSON.stringify(this.savedDocs));
+                },
+
+                saveDocToHistory() {
+                    // check if doc with same number already exists
+                    const idx = this.savedDocs.findIndex(d => d.number === this.doc.number);
+                    const docToSave = JSON.parse(JSON.stringify(this.doc)); // deep copy
+                    docToSave.savedAt = new Date().toISOString();
+
+                    if (idx >= 0) {
+                        if (confirm('Document with this number already exists. Overwrite?')) {
+                            this.savedDocs[idx] = docToSave;
+                            alert('Document updated in History.');
+                        } else {
+                            return; // User cancelled
+                        }
+                    } else {
+                        this.savedDocs.unshift(docToSave);
+                        alert('Document saved to History.');
+                    }
+                    this.saveHistoryToStorage();
+                },
+
+                loadHistoryDoc(index) {
+                    if (confirm('Load this document? Unsaved changes in current document will be lost.')) {
+                        this.doc = JSON.parse(JSON.stringify(this.savedDocs[index]));
+                        this.showHistory = false;
+                        this.saveCurrentDoc(); // Update current session
+                    }
+                },
+
+                deleteHistoryDoc(index) {
+                    if (confirm('Are you sure you want to delete this specific saved record?')) {
+                        this.savedDocs.splice(index, 1);
+                        this.saveHistoryToStorage();
+                    }
+                },
+                // ----------------------------------
+
                 loadCurrentDoc() {
                     const saved = localStorage.getItem('laga_current_doc');
                     if (saved) {
@@ -1005,11 +1230,16 @@
                             const parsed = JSON.parse(saved);
                             // Merge with default to ensure new fields are present
                             this.doc = { ...this.doc, ...parsed };
+
+                            // Normalize doc-level taxRate to allowed slabs (protect against old values)
+                            this.doc.taxRate = this.normalizeTaxRate(this.doc.taxRate !== undefined ? this.doc.taxRate : 18);
+
                         } catch (e) {
                             console.error("Failed to load current doc", e);
                         }
                     }
                 },
+
 
                 resetDoc() {
                     if (confirm('Are you sure you want to clear this document and start fresh?')) {
@@ -1032,8 +1262,10 @@
                             state: '',
                             pan: ''
                         };
+                        // Normalize and set document-level taxRate and items
+                        this.doc.taxRate = this.normalizeTaxRate(this.doc.taxRate !== undefined ? this.doc.taxRate : 18);
                         this.doc.items = [
-                            { desc: '', hsn: '', qty: 1, rate: 0, discount: 0 }
+                            { desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate) }
                         ];
 
                         // Set standard terms based on type
@@ -1070,7 +1302,9 @@
                 },
 
                 itemTaxAmount(item) {
-                    return this.itemTaxableValue(item) * 0.18;
+                    const ratePercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
+                    const rateFraction = ratePercent / 100;
+                    return this.itemTaxableValue(item) * rateFraction;
                 },
 
                 itemTotal(item) {
@@ -1091,15 +1325,27 @@
                 },
 
                 cgstAmount() {
-                    return this.isInterstate() ? 0 : this.subTotal() * 0.09;
+                    if (this.isInterstate()) return 0;
+                    return this.doc.items.reduce((sum, item) => {
+                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
+                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
+                    }, 0);
                 },
 
                 sgstAmount() {
-                    return this.isInterstate() ? 0 : this.subTotal() * 0.09;
+                    if (this.isInterstate()) return 0;
+                    return this.doc.items.reduce((sum, item) => {
+                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
+                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
+                    }, 0);
                 },
 
                 igstAmount() {
-                    return this.isInterstate() ? this.subTotal() * 0.18 : 0;
+                    if (!this.isInterstate()) return 0;
+                    return this.doc.items.reduce((sum, item) => {
+                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
+                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100));
+                    }, 0);
                 },
 
                 taxAmount() {
@@ -1124,6 +1370,30 @@
 
                 formatCurrency(num) {
                     return Number(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                // Format percentage neatly: integer percentages show without decimals (e.g., '40%'),
+                // otherwise show up to 2 decimals (e.g., '2.50%')
+                formatPercent(p) {
+                    const n = Number(p);
+                    if (!isFinite(n)) return '';
+                    return Number.isInteger(n) ? `${n}%` : `${n.toFixed(2)}%`;
+                },
+
+                // Format split percent for CGST/SGST display e.g., '9% + 9%' or '2.50% + 2.50%'
+                formatSplitPercent(p) {
+                    const n = Number(p);
+                    if (!isFinite(n)) return '';
+                    const half = n / 2;
+                    const halfStr = Number.isInteger(half) ? `${half}%` : `${half.toFixed(2)}%`;
+                    return `${halfStr} + ${halfStr}`;
+                },
+
+                // Returns a single tax rate if all items share the same slab, otherwise null
+                summaryTaxRate() {
+                    if (!Array.isArray(this.doc.items) || this.doc.items.length === 0) return null;
+                    const rates = Array.from(new Set(this.doc.items.map(i => Number(i.taxRate !== undefined ? i.taxRate : (this.doc.taxRate || 18)))));
+                    return rates.length === 1 ? rates[0] : null;
                 },
 
                 async savePDF() {
@@ -1177,6 +1447,19 @@
                     lucide.createIcons();
                     this.loadMasterData();
                     this.loadCurrentDoc();
+                    this.loadHistory();
+
+                    // Normalize tax rates for existing items and master products to allowed GST slabs
+                    if (Array.isArray(this.doc.items)) {
+                        this.doc.items.forEach(item => {
+                            item.taxRate = this.normalizeTaxRate(item.taxRate !== undefined ? item.taxRate : this.doc.taxRate || 18);
+                        });
+                    }
+                    if (this.masterData && Array.isArray(this.masterData.products)) {
+                        this.masterData.products.forEach(p => {
+                            p.taxRate = this.normalizeTaxRate(p.taxRate !== undefined ? p.taxRate : this.doc.taxRate || 18);
+                        });
+                    }
 
                     // Watch for any change in doc and auto-save
                     this.$watch('doc', () => {
