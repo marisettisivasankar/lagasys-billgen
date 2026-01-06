@@ -98,6 +98,9 @@
 
 <body x-data="billApp()">
 
+    <!-- Hidden File Input for Import -->
+    <input type="file" id="importFile" accept=".json" class="hidden" @change="importData($event)">
+
     <!-- Navbar -->
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 no-print">
         <div class="max-w-[1400px] mx-auto px-4 h-16 flex items-center justify-between">
@@ -108,10 +111,28 @@
                 <span class="heading-font font-bold text-xl text-slate-900">BillGen</span>
             </div>
             <div class="flex items-center space-x-4">
+                <!-- Data Actions -->
+                <div class="flex items-center space-x-2 border-r border-slate-200 pr-4 mr-2">
+                    <button @click="exportData()" title="Backup Data"
+                        class="text-slate-500 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-full transition-all">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                    </button>
+                    <button @click="document.getElementById('importFile').click()" title="Restore Data"
+                        class="text-slate-500 hover:text-green-600 p-2 hover:bg-green-50 rounded-full transition-all">
+                        <i data-lucide="upload" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
                 <button @click="showHistory = true"
                     class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
                     <i data-lucide="history" class="w-4 h-4 mr-1"></i>
                     History
+                </button>
+
+                <button @click="showSettings = true" title="Settings"
+                    class="text-slate-600 hover:text-slate-800 font-medium text-sm transition-colors flex items-center ml-3">
+                    <i data-lucide="settings" class="w-4 h-4 mr-1"></i>
+                    Settings
                 </button>
                 <div class="h-6 w-px bg-slate-200"></div>
                 <button @click="saveDocToHistory()"
@@ -119,6 +140,14 @@
                     title="Save to History">
                     <i data-lucide="save" class="w-4 h-4 mr-1"></i>
                     Save Draft
+                </button>
+
+                <!-- Email Button -->
+                <button @click="openEmailClient()"
+                    class="text-slate-600 hover:text-indigo-600 font-medium text-sm transition-colors flex items-center"
+                    title="Draft Email">
+                    <i data-lucide="mail" class="w-4 h-4 mr-1"></i>
+                    Email
                 </button>
 
                 <button @click="savePDF()" :disabled="isSaving"
@@ -193,6 +222,13 @@
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
 
+                        <!-- Convert Button (Only for Quotations) -->
+                        <button @click.stop="convertHistoryDoc(d)" x-show="d.type === 'Quotation'"
+                            class="absolute top-2 right-10 p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Convert to Tax Invoice">
+                            <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
+                        </button>
+
                         <div @click="loadHistoryDoc(index)" class="cursor-pointer">
                             <div class="flex items-center justify-between mb-2 pr-8">
                                 <span
@@ -207,15 +243,84 @@
 
                             <div class="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
                                 <span class="text-xs font-bold text-slate-500">Total:</span>
-                                <span class="font-black text-slate-800" x-text="'₹ ' + Number(d.items.reduce((sum, i) => {
-                                        const taxable = (i.qty*i.rate) - ((d.type==='Quotation' ? (i.qty*i.rate*(i.discount||0)/100) : 0));
-                                        const rate = (i.taxRate !== undefined) ? i.taxRate : (d.taxRate !== undefined ? d.taxRate : 18);
-                                        return sum + taxable + (taxable * (rate/100));
-                                    }, 0)).toLocaleString('en-IN', {maximumFractionDigits:0})"></span>
+                                <span class="font-black text-slate-800" x-text="((this.currencies.find(c => c.code === (d.currency || 'INR')) || {symbol:'₹'}).symbol) + ' ' + Number(d.items.reduce((sum, i) => { const taxable = (i.qty*i.rate) - ((d.type==='Quotation' ? (i.qty*i.rate*(i.discount||0)/100) : 0)); const rate = (i.taxRate !== undefined) ? i.taxRate : (d.taxRate !== undefined ? d.taxRate : 18); return sum + taxable + (taxable * (rate/100)); }, 0) + (Number(d.bankChargesAmount || 0))).toLocaleString(((this.currencies.find(c => c.code === (d.currency || 'INR')) || {locale:'en-IN'}).locale), {maximumFractionDigits:0})"></span>
                             </div>
                         </div>
                     </div>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div x-show="showSettings" style="display: none;"
+        class="fixed inset-0 z-[100] flex items-center justify-end bg-black/50 backdrop-blur-sm transition-all"
+        x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+
+        <div class="w-full max-w-md h-full bg-white shadow-2xl flex flex-col transform transition-transform"
+            @click.away="showSettings = false" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
+            x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0"
+            x-transition:leave-end="translate-x-full">
+
+            <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                    <i data-lucide="settings" class="w-5 h-5 mr-2 text-blue-600"></i>
+                    Global Settings
+                </h2>
+                <button @click="showSettings = false" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+                <div class="mb-4">
+                    <h3 class="font-bold text-slate-800 mb-2">Default Bank Accounts</h3>
+                    <p class="text-sm text-slate-500 mb-3">Edit the default bank account details that will be applied to new documents or when you click "Apply to Document".</p>
+
+                    <div class="space-y-3">
+                        <template x-for="code in ['USD','EUR']" :key="code">
+                            <div class="p-3 border rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="font-bold">Default <span x-text="code"></span> Account</div>
+                                    <div class="text-xs text-slate-400">Visible when currency is <span x-text="code"></span></div>
+                                </div>
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="text-xs text-slate-500">Name</label>
+                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].name">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500">Bank</label>
+                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].bankName">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="text-xs text-slate-500">Branch</label>
+                                            <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].branch">
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-slate-500">Acc. Number</label>
+                                            <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].acc">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500">IFSC / SWIFT</label>
+                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].ifsc">
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button @click="saveGlobalBanks()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+                    <button @click="applyGlobalBanksToDoc()" class="bg-green-600 text-white px-4 py-2 rounded">Apply to Document</button>
+                    <button @click="resetGlobalBanks()" class="text-sm text-red-600">Reset to Samples</button>
+                </div>
             </div>
         </div>
     </div>
@@ -272,8 +377,14 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1"
                                     x-text="doc.type === 'Quotation' ? 'Quotation No.' : (doc.type === 'Proforma Invoice' ? 'Proforma No.' : (doc.type === 'Tax Invoice' ? 'Invoice No.' : 'Challan No.'))"></label>
-                                <input type="text" x-model="doc.number"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <div class="relative">
+                                    <input type="text" x-model="doc.number" @blur="checkDuplicateNumber()"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 pr-10 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <button @click="getNextNumber()" type="button" title="Get Next Number"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1"
@@ -281,6 +392,18 @@
                                 <input type="date" x-model="doc.date"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
+                        </div>
+
+                        <!-- Currency Selector -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">Currency</label>
+                            <select x-model="doc.currency" @change="lucide.createIcons()"
+                                class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <template x-for="curr in currencies" :key="curr.code">
+                                    <option :value="curr.code"
+                                        x-text="curr.code + ' - ' + curr.name + ' (' + curr.symbol + ')'"></option>
+                                </template>
+                            </select>
                         </div>
 
                         <!-- Print Settings -->
@@ -595,7 +718,7 @@
                                                             class="flex justify-between text-[10px] text-slate-400 mt-0.5">
                                                             <span x-text="'HSN: ' + p.hsn"></span>
                                                             <span class="font-mono text-slate-600"
-                                                                x-text="'₹' + p.rate"></span>
+                                                                x-text="getCurrencySymbol() + p.rate"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -651,31 +774,43 @@
                         <i data-lucide="building-2" class="w-5 h-5 mr-2 text-blue-500"></i>
                         Bank Details
                     </h2>
+
+                    <!-- Bank Charges (fixed) - shown only for USD/EUR -->
+                    <div x-show="['USD','EUR'].includes(doc.currency)" class="mb-3">
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Bank Charges (fixed)</label>
+                        <div class="relative">
+                            <input type="number" min="0" x-model.number="doc.bankChargesAmount"
+                                class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold"
+                                x-text="getCurrencySymbol()"></div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Fixed bank charge applied for selected currency. Editable per document.</p>
+                    </div>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">Name</label>
-                            <input type="text" x-model="doc.bank.name"
+                            <input type="text" x-model="doc.banks[doc.currency].name"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">Bank</label>
-                            <input type="text" x-model="doc.bank.bankName"
+                            <input type="text" x-model="doc.banks[doc.currency].bankName"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">Acc. Number</label>
-                            <input type="text" x-model="doc.bank.acc"
+                            <input type="text" x-model="doc.banks[doc.currency].acc"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">Branch</label>
-                                <input type="text" x-model="doc.bank.branch"
+                                <input type="text" x-model="doc.banks[doc.currency].branch"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">IFSC Code</label>
-                                <input type="text" x-model="doc.bank.ifsc"
+                                <input type="text" x-model="doc.banks[doc.currency].ifsc"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
                         </div>
@@ -815,7 +950,7 @@
                                     <p class="font-medium text-[9px] text-slate-500"
                                         x-text="doc.type == 'Quotation' ? 'Quotation Date' : (doc.type == 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))">
                                     </p>
-                                    <p class="font-bold" x-text="doc.date"></p>
+                                    <p class="font-bold" x-text="formatDate(doc.date)"></p>
                                 </div>
 
                                 <!-- Dynamic Layout for Quotation vs Invoice -->
@@ -823,7 +958,8 @@
                                     <div class="contents">
                                         <div class="p-1 border-r border-b border-black">
                                             <p class="font-medium text-[9px] text-slate-500">Validity End Date</p>
-                                            <p class="font-bold" x-text="doc.validityDate || '-'"></p>
+                                            <p class="font-bold"
+                                                x-text="doc.validityDate ? formatDate(doc.validityDate) : '-'"></p>
                                         </div>
                                         <div class="p-1 border-b border-black">
                                             <p class="font-medium text-[9px] text-slate-500">Payment Terms</p>
@@ -850,11 +986,12 @@
                                         </div>
                                         <div class="p-1 border-b border-black">
                                             <p class="font-medium text-[9px] text-slate-500">Purchase Order Date</p>
-                                            <p class="font-bold" x-text="doc.poDate || '-'"></p>
+                                            <p class="font-bold" x-text="doc.poDate ? formatDate(doc.poDate) : '-'"></p>
                                         </div>
                                         <div class="p-1 border-r border-black" x-show="doc.type !== 'Delivery Challan'">
                                             <p class="font-medium text-[9px] text-slate-500">Due Date</p>
-                                            <p class="font-bold" x-text="doc.dueDate || '-'"></p>
+                                            <p class="font-bold" x-text="doc.dueDate ? formatDate(doc.dueDate) : '-'">
+                                            </p>
                                         </div>
                                         <div class="p-1" x-show="doc.type !== 'Delivery Challan'">
                                         </div>
@@ -940,8 +1077,7 @@
                                     Total
                                     in words</div>
                                 <div class="p-4 flex-1 flex items-center justify-center text-center font-bold uppercase leading-tight"
-                                    x-text="numberToWords(grandTotal())">
-                                    FOUR THOUSAND FOUR HUNDRED AND NINETY RUPEES ONLY
+                                    x-text="numberToWords(grandTotal(), doc.currency)">
                                 </div>
                                 <div x-show="doc.type !== 'Delivery Challan'" class="contents">
                                     <div
@@ -950,15 +1086,15 @@
                                         Details</div>
                                     <div class="p-2 text-[10px] grid grid-cols-2 gap-y-1">
                                         <div class="font-bold">Name</div>
-                                        <div x-text="doc.bank.name"></div>
+                                        <div x-text="bankForCurrency().name"></div>
                                         <div class="font-bold">Acc. Number</div>
-                                        <div x-text="doc.bank.acc"></div>
+                                        <div x-text="bankForCurrency().acc"></div>
                                         <div class="font-bold">Bank</div>
-                                        <div x-text="doc.bank.bankName"></div>
+                                        <div x-text="bankForCurrency().bankName"></div>
                                         <div class="font-bold">Branch</div>
-                                        <div x-text="doc.bank.branch"></div>
+                                        <div x-text="bankForCurrency().branch"></div>
                                         <div class="font-bold">IFSC Code</div>
-                                        <div x-text="doc.bank.ifsc"></div>
+                                        <div x-text="bankForCurrency().ifsc"></div>
                                     </div>
                                 </div>
                             </div>
@@ -992,6 +1128,10 @@
                                             <td class="p-1" x-text="formatCurrency(sgstAmount())"></td>
                                         </tr>
                                     </template>
+                                    <tr class="border-b border-black" x-show="bankChargesValue() > 0">
+                                        <td class="p-1 text-left font-bold">Bank Charges</td>
+                                        <td class="p-1" x-text="getCurrencySymbol() + ' ' + formatCurrency(bankChargesValue())"></td>
+                                    </tr>
                                     <tr class="border-b border-black">
                                         <td class="p-1 text-left font-bold">Total Tax</td>
                                         <td class="p-1" x-text="formatCurrency(taxAmount())"></td>
@@ -1002,7 +1142,8 @@
                                     </tr>
                                     <tr class="border-b border-black bg-slate-100">
                                         <td class="p-1 text-left font-bold text-lg">Total Amount</td>
-                                        <td class="p-1 text-lg font-black" x-text="'₹ ' + formatCurrency(grandTotal())">
+                                        <td class="p-1 text-lg font-black"
+                                            x-text="getCurrencySymbol() + ' ' + formatCurrency(grandTotal())">
                                         </td>
                                     </tr>
                                 </table>
@@ -1077,6 +1218,7 @@
                     type: 'Quotation',
                     customTitle: '',
                     number: 'LGS-QTN-2026-001',
+                    currency: 'INR',
                     date: new Date().toISOString().split('T')[0],
                     validityDate: '',
                     paymentTerms: '100% Advance',
@@ -1101,6 +1243,7 @@
                     items: [
                         { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0, taxRate: 18 }
                     ],
+                    // Legacy single bank kept for compatibility; primary bank for INR
                     bank: {
                         name: 'LAGA SYSTEMS PVT LTD',
                         bankName: 'Axis Bank',
@@ -1108,6 +1251,35 @@
                         acc: '008010200057114',
                         ifsc: 'UTIB0000008'
                     },
+
+                    // Map of bank accounts per currency (INR, USD, EUR)
+                    banks: {
+                        INR: {
+                            name: 'LAGA SYSTEMS PVT LTD',
+                            bankName: 'Axis Bank',
+                            branch: 'Hyderabad Main Branch (Begumpet)',
+                            acc: '008010200057114',
+                            ifsc: 'UTIB0000008'
+                        },
+                        USD: {
+                            name: 'LAGA SYSTEMS PVT LTD',
+                            bankName: 'Sample USD Bank',
+                            branch: 'NY Branch',
+                            acc: '',
+                            ifsc: ''
+                        },
+                        EUR: {
+                            name: 'LAGA SYSTEMS PVT LTD',
+                            bankName: 'Sample EUR Bank',
+                            branch: 'Frankfurt Branch',
+                            acc: '',
+                            ifsc: ''
+                        }
+                    },
+
+                    // Fixed bank charges (editable per document). Default applied when currency is USD/EUR.
+                    bankChargesAmount: 0,
+                    bankChargesEditable: true,
                     tnc: [
                         'Subject to Hyderabad Jurisdiction.',
                         'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
@@ -1116,6 +1288,14 @@
                     // Tax rate (percent) used for IGST / CGST / SGST calculations. Default: 18%
                     taxRate: 18
                 },
+
+                currencies: [
+                    { code: 'INR', name: 'Indian Rupee', symbol: '₹', locale: 'en-IN' },
+                    { code: 'USD', name: 'US Dollar', symbol: '$', locale: 'en-US' },
+                    { code: 'EUR', name: 'Euro', symbol: '€', locale: 'de-DE' }
+                ],
+
+                sequences: {},
 
                 masterData: {
                     customers: [
@@ -1208,6 +1388,58 @@
                     this.doc.number = `${prefix}-2026-001`;
                 },
 
+                // Smart Numbering Functions
+                getNextNumber() {
+                    const type = this.doc.type;
+                    const prefix = this.getDocPrefix(type);
+                    const year = new Date().getFullYear();
+
+                    // Get last used number for this type
+                    const key = `${type}-${year}`;
+                    const lastNum = this.sequences[key] || 0;
+                    const nextNum = lastNum + 1;
+
+                    this.doc.number = `${prefix}-${year}-${String(nextNum).padStart(3, '0')}`;
+
+                    // Update sequence
+                    this.sequences[key] = nextNum;
+                    this.saveSequences();
+
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                checkDuplicateNumber() {
+                    const currentNum = this.doc.number;
+                    const duplicate = this.savedDocs.find(d => d.number === currentNum);
+                    if (duplicate) {
+                        alert(`⚠️ Warning: Document number "${currentNum}" already exists in history!\n\nDocument: ${duplicate.type}\nCustomer: ${duplicate.customer.name}\nDate: ${duplicate.date}`);
+                    }
+                },
+
+                getDocPrefix(type) {
+                    if (type === 'Quotation') return 'LGS-QTN';
+                    if (type === 'Proforma Invoice') return 'LGS-PI';
+                    if (type === 'Tax Invoice') return 'LGS-TI';
+                    if (type === 'Delivery Challan') return 'LGS-DC';
+                    return 'LGS-DOC';
+                },
+
+                loadSequences() {
+                    const saved = localStorage.getItem('laga_sequences');
+                    if (saved) {
+                        try {
+                            this.sequences = JSON.parse(saved);
+                        } catch (e) {
+                            console.error('Failed to load sequences', e);
+                            this.sequences = {};
+                        }
+                    }
+                },
+
+                saveSequences() {
+                    localStorage.setItem('laga_sequences', JSON.stringify(this.sequences));
+                },
+
                 saveToMaster(type) {
                     if (type === 'customer') {
                         const exists = this.masterData.customers.findIndex(c => c.name === this.doc.customer.name);
@@ -1243,6 +1475,46 @@
                     }
                 },
 
+                // Global Banks Settings (defaults applied when creating or updating docs)
+                saveGlobalBanks() {
+                    try {
+                        localStorage.setItem('laga_global_banks', JSON.stringify(this.globalBanks));
+                        alert('Global bank defaults saved.');
+                    } catch (e) {
+                        console.error('Failed to save global banks', e);
+                        alert('Failed to save settings.');
+                    }
+                },
+
+                loadGlobalBanks() {
+                    const saved = localStorage.getItem('laga_global_banks');
+                    if (saved) {
+                        try {
+                            this.globalBanks = JSON.parse(saved);
+                        } catch (e) {
+                            console.error('Failed to load global banks', e);
+                        }
+                    }
+                },
+
+                resetGlobalBanks() {
+                    if (!confirm('Reset global bank defaults to sample values?')) return;
+                    this.globalBanks = {
+                        USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
+                        EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
+                    };
+                    this.saveGlobalBanks();
+                },
+
+                // Apply global defaults to current document banks (overwrites per-currency bank entries)
+                applyGlobalBanksToDoc() {
+                    if (!confirm('Apply global bank defaults to current document? This will overwrite the document\'s per-currency bank details.')) return;
+                    this.doc.banks = { ...this.doc.banks, ...JSON.parse(JSON.stringify(this.globalBanks)) };
+                    this.saveCurrentDoc();
+                    alert('Global banks applied to current document.');
+                },
+
+
                 saveCurrentDoc() {
                     localStorage.setItem('laga_current_doc', JSON.stringify(this.doc));
                 },
@@ -1250,6 +1522,14 @@
                 // --- History / Saved Docs Logic ---
                 savedDocs: [],
                 showHistory: false,
+
+                // Settings panel state for global defaults
+                showSettings: false,
+                globalBanks: {
+                    USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
+                    EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
+                },
+
 
                 loadHistory() {
                     const saved = localStorage.getItem('laga_saved_docs');
@@ -1308,6 +1588,16 @@
                     if (saved) {
                         try {
                             const parsed = JSON.parse(saved);
+
+                            // If legacy single bank exists and no per-currency banks, migrate it
+                            if (parsed && parsed.bank && !parsed.banks) {
+                                parsed.banks = {
+                                    INR: parsed.bank,
+                                    USD: parsed.banks && parsed.banks.USD ? parsed.banks.USD : { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
+                                    EUR: parsed.banks && parsed.banks.EUR ? parsed.banks.EUR : { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
+                                };
+                            }
+
                             // Merge with default to ensure new fields are present
                             this.doc = { ...this.doc, ...parsed };
 
@@ -1433,8 +1723,13 @@
                     return this.cgstAmount() + this.sgstAmount() + this.igstAmount();
                 },
 
+                // Bank charges fixed amount (per document)
+                bankChargesValue() {
+                    return Number(this.doc.bankChargesAmount || 0);
+                },
+
                 grandTotalRaw() {
-                    return this.subTotal() + this.taxAmount();
+                    return this.subTotal() + this.taxAmount() + this.bankChargesValue();
                 },
 
                 roundOff() {
@@ -1450,7 +1745,27 @@
                 },
 
                 formatCurrency(num) {
-                    return Number(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const curr = this.currencies.find(c => c.code === (this.doc.currency || 'INR'));
+                    const locale = curr ? curr.locale : 'en-IN';
+                    return Number(num).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+
+                getCurrencySymbol() {
+                    const curr = this.currencies.find(c => c.code === (this.doc.currency || 'INR'));
+                    return curr ? curr.symbol : '₹';
+                },
+
+                // Returns bank object for the currently selected currency (falls back to legacy doc.bank)
+                bankForCurrency() {
+                    if (this.doc && this.doc.banks && this.doc.banks[this.doc.currency]) return this.doc.banks[this.doc.currency];
+                    return this.doc.bank || { name: '', bankName: '', acc: '', branch: '', ifsc: '' };
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const parts = dateStr.split('-');
+                    if (parts.length !== 3) return dateStr;
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`;
                 },
 
                 // Format percentage neatly: integer percentages show without decimals (e.g., '40%'),
@@ -1527,8 +1842,17 @@
                 init() {
                     lucide.createIcons();
                     this.loadMasterData();
+                    this.loadGlobalBanks();
                     this.loadCurrentDoc();
                     this.loadHistory();
+                    this.loadSequences();
+
+                    // Ensure doc.banks has entries from global defaults when missing
+                    if (!this.doc.banks) this.doc.banks = {};
+                    ['USD','EUR','INR'].forEach(code => {
+                        if (!this.doc.banks[code]) this.doc.banks[code] = JSON.parse(JSON.stringify(this.globalBanks[code] || this.doc.bank || {}));
+                    });
+
 
                     // Normalize tax rates for existing items and master products to allowed GST slabs
                     if (Array.isArray(this.doc.items)) {
@@ -1540,6 +1864,11 @@
                         this.masterData.products.forEach(p => {
                             p.taxRate = this.normalizeTaxRate(p.taxRate !== undefined ? p.taxRate : this.doc.taxRate || 18);
                         });
+                    }
+
+                    // Apply initial bank charges default based on current currency (USD/EUR)
+                    if (['USD','EUR'].includes(this.doc.currency) && (!this.doc.bankChargesAmount || Number(this.doc.bankChargesAmount) === 0)) {
+                        this.doc.bankChargesAmount = 63;
                     }
 
                     // Watch for any change in doc and auto-save
@@ -1560,11 +1889,45 @@
 
                         this.doc.number = `${prefix}-2026-${sequential}`;
                     });
+
+                    // Re-initialize Lucide icons when history sidebar opens
+                    this.$watch('showHistory', (value) => {
+                        if (value) {
+                            this.$nextTick(() => {
+                                lucide.createIcons();
+                            });
+                        }
+                    });
+
+                    // Watch for currency changes to set default bank charges for USD/EUR
+                    this.$watch('doc.currency', (value) => {
+                        const setCurrencies = ['USD','EUR'];
+                        if (setCurrencies.includes(value)) {
+                            // Apply default only if it's currently zero/empty
+                            if (!this.doc.bankChargesAmount || Number(this.doc.bankChargesAmount) === 0) {
+                                this.doc.bankChargesAmount = 63;
+                            }
+                        } else {
+                            // Clear bank charges for other currencies
+                            this.doc.bankChargesAmount = 0;
+                        }
+                    });
                 },
 
-                numberToWords(n) {
-                    if (n < 0) return "Negative " + this.numberToWords(-n);
-                    if (n === 0) return "ZERO RUPEES ONLY";
+                numberToWords(n, currencyCode = 'INR') {
+                    if (n < 0) return "Negative " + this.numberToWords(-n, currencyCode);
+
+                    const curr = (this.currencies || []).find(c => c.code === (currencyCode || 'INR'));
+                    let currencyWord = 'RUPEES';
+                    if (curr && curr.name) {
+                        // Use last word of currency name and make it plural (simple heuristic)
+                        const parts = curr.name.split(' ');
+                        let last = parts[parts.length - 1].toUpperCase();
+                        if (!last.endsWith('S')) last = last + 'S';
+                        currencyWord = last;
+                    }
+
+                    if (n === 0) return `ZERO ${currencyWord} ONLY`;
 
                     const single = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
                     const double = ["TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
@@ -1595,7 +1958,111 @@
                     res += format(Math.floor((n / 1000) % 100), "THOUSAND");
                     res += format(Math.floor(n % 1000), "");
 
-                    return (res.trim() + " RUPEES ONLY").replace(/\s+/g, ' ');
+                    return (res.trim() + ` ${currencyWord} ONLY`).replace(/\s+/g, ' ');
+                },
+
+                // --- New Features Logic ---
+
+                exportData() {
+                    const data = {
+                        masterData: this.masterData,
+                        savedDocs: this.savedDocs,
+                        // Not exporting 'doc' as it's the current temp state
+                        backupDate: new Date().toISOString()
+                    };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = `billgen_backup_${new Date().toISOString().slice(0, 10)}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                },
+
+                importData(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (confirm(`Found backup from ${new Date(data.backupDate).toLocaleDateString()}. \nThis will OVERWRITE your current saved Customers, Products, and History. Continue?`)) {
+                                if (data.masterData) {
+                                    this.masterData = data.masterData;
+                                    this.saveMasterData();
+                                }
+                                if (data.savedDocs) {
+                                    this.savedDocs = data.savedDocs;
+                                    this.saveHistoryToStorage();
+                                }
+                                alert('Data restored successfully! The page will now reload.');
+                                window.location.reload();
+                            }
+                        } catch (err) {
+                            alert('Error parsing backup file. Please ensure it is a valid JSON file exported from this app.');
+                            console.error(err);
+                        }
+                    };
+                    reader.readAsText(file);
+                    // Reset input so same file can be selected again if needed
+                    event.target.value = '';
+                },
+
+                convertHistoryDoc(savedDoc) {
+                    if (confirm(`Convert Quotation ${savedDoc.number} to a new Tax Invoice?`)) {
+                        // Deep copy the quotation
+                        const newDoc = JSON.parse(JSON.stringify(savedDoc));
+
+                        // Transform to Tax Invoice
+                        newDoc.type = 'Tax Invoice';
+                        newDoc.date = new Date().toISOString().split('T')[0];
+
+                        // Reset doc number to next available Invoice Number
+                        // We use a temporary logic to trigger the watcher or set defaults
+                        // But since we are loading it directly, let's manually generate the TI number logic
+                        const prefix = 'LGS-TI';
+                        newDoc.number = `${prefix}-2026-001`; // Best guess, user should check sequence
+
+                        // Clear Quote specific fields if they don't apply, 
+                        // but usually payment terms etc are useful to keep.
+                        // We definitely need to ensure revenue stamp is enabled by default for TI
+                        if (!newDoc.settings) newDoc.settings = {};
+                        newDoc.settings.showRevenueStamp = true;
+                        newDoc.settings.showCompanyStamp = true;
+                        newDoc.settings.showSignature = true;
+
+                        this.doc = newDoc;
+                        this.showHistory = false;
+
+                        // Trigger recalculation/save
+                        this.saveCurrentDoc();
+
+                        alert('Converted to Tax Invoice! Please check the Invoice Number sequence.');
+                    }
+                },
+
+                openEmailClient() {
+                    const customerName = this.doc.customer.name || 'Customer';
+                    const number = this.doc.number || 'Draft';
+                    const type = this.doc.type;
+                    const subject = encodeURIComponent(`${type} #${number} from LaGa Systems Pvt Ltd`);
+
+                    const total = this.grandTotal();
+                    const amountStr = this.formatCurrency(total);
+
+                    const body = encodeURIComponent(
+                        `Dear ${customerName},\n\n` +
+                        `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
+                        `Kindly review and process at your earliest convenience.\n\n` +
+                        `Regards,\n` +
+                        `LaGa Systems Pvt Ltd\n` +
+                        `Hyderabad`
+                    );
+
+                    window.open(`mailto:?subject=${subject}&body=${body}`);
                 }
             }
         }
