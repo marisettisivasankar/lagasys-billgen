@@ -11,92 +11,78 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f8fafc;
-        }
-
-        .heading-font {
-            font-family: 'Poppins', sans-serif;
-        }
-
-        @media print {
-            @page {
-                size: A4;
-                margin: 0;
-            }
-
-            .no-print {
-                display: none !important;
-            }
-
-            body {
-                background-color: white !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-
-            main {
-                padding: 0 !important;
-                margin: 0 !important;
-                max-width: none !important;
-            }
-
-            .print-area {
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                box-shadow: none !important;
-                width: 100% !important;
-                height: auto !important;
-                min-height: 0 !important;
-            }
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        /* Hide page scrollbar on screen; allow preview/editor to manage scrolling */
-        @media screen {
-
-            html,
-            body {
-                height: 100%;
-                overflow: hidden;
-            }
-        }
-
-        /* PDF Specific Table Styles */
-        .pdf-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 0.5px solid #334155;
-        }
-
-        .pdf-table th,
-        .pdf-table td {
-            border: 0.5px solid #334155;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body x-data="billApp()">
+
+    <!-- Auth Overlay -->
+    <template x-if="!user">
+        <div class="fixed inset-0 z-[200] bg-slate-900 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 transform transition-all">
+                <div class="text-center mb-8">
+                    <div class="inline-flex p-4 bg-blue-600 rounded-2xl mb-4">
+                        <i data-lucide="file-text" class="text-white w-8 h-8"></i>
+                    </div>
+                    <h1 class="text-3xl font-black text-slate-900" x-text="isLogin ? 'Welcome Back' : 'Create Account'">
+                    </h1>
+                    <p class="text-slate-500 font-medium mt-2"
+                        x-text="isLogin ? 'Sign in to access your billings' : 'Register to start managing your GST filings'">
+                    </p>
+                </div>
+
+                <form @submit.prevent="isLogin ? signIn() : signUp()" class="space-y-4">
+                    <template x-if="!isLogin">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Full
+                                Name</label>
+                            <input type="text" x-model="authName" required
+                                class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium">
+                        </div>
+                    </template>
+
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Email
+                            Address</label>
+                        <input type="email" x-model="authEmail" required
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label
+                            class="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Password</label>
+                        <input type="password" x-model="authPassword" required
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium">
+                    </div>
+
+                    <button type="submit" :disabled="authLoading"
+                        class="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center space-x-2">
+                        <template x-if="!authLoading">
+                            <span x-text="isLogin ? 'Sign In' : 'Create Account'"></span>
+                        </template>
+                        <template x-if="authLoading">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+                                    fill="none"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                        </template>
+                    </button>
+                </form>
+
+                <div class="mt-8 text-center bg-slate-50 rounded-2xl p-4">
+                    <p class="text-sm font-medium text-slate-500">
+                        <span x-text="isLogin ? 'New to BillGen?' : 'Already have an account?'"></span>
+                        <button @click="isLogin = !isLogin"
+                            class="text-blue-600 font-black ml-1 hover:underline outline-none"
+                            x-text="isLogin ? 'Register now' : 'Sign in'"></button>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </template>
 
     <!-- Hidden File Input for Import -->
     <input type="file" id="importFile" accept=".json" class="hidden" @change="importData($event)">
@@ -111,7 +97,7 @@
                 <span class="heading-font font-bold text-xl text-slate-900">BillGen</span>
             </div>
             <div class="flex items-center space-x-4">
-                <!-- Data Actions -->
+                <!-- Data Actions 
                 <div class="flex items-center space-x-2 border-r border-slate-200 pr-4 mr-2">
                     <button @click="exportData()" title="Backup Data"
                         class="text-slate-500 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-full transition-all">
@@ -121,20 +107,34 @@
                         class="text-slate-500 hover:text-green-600 p-2 hover:bg-green-50 rounded-full transition-all">
                         <i data-lucide="upload" class="w-5 h-5"></i>
                     </button>
-                </div>
+                </div>-->
+
+                <button @click="showDashboard = true; loadHistory();"
+                    class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 mr-1"></i>
+                    Dashboard
+                </button>
+
+                <div class="h-6 w-px bg-slate-200 ml-3"></div>
 
                 <button @click="showHistory = true"
-                    class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
+                    class="ml-3 text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
                     <i data-lucide="history" class="w-4 h-4 mr-1"></i>
                     History
                 </button>
 
-                <button @click="showSettings = true" title="Settings"
+                <button @click="showSettings = true" title="Settings" x-show="isAdmin()"
                     class="text-slate-600 hover:text-slate-800 font-medium text-sm transition-colors flex items-center ml-3">
                     <i data-lucide="settings" class="w-4 h-4 mr-1"></i>
                     Settings
                 </button>
-                <div class="h-6 w-px bg-slate-200"></div>
+                <div class="h-6 w-px bg-slate-200" x-show="isAdmin()"></div>
+                <button @click="showGstDashboard = true" x-show="isAdmin() || isAccountant()"
+                    class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center ml-3">
+                    <i data-lucide="shield-check" class="w-4 h-4 mr-1"></i>
+                    GST Compliance
+                </button>
+                <div class="h-6 w-px bg-slate-200 ml-3" x-show="isAdmin() || isAccountant()"></div>
                 <button @click="saveDocToHistory()"
                     class="text-slate-600 hover:text-green-600 font-medium text-sm transition-colors flex items-center"
                     title="Save to History">
@@ -154,13 +154,7 @@
                     class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg transition-all font-bold shadow-lg shadow-blue-200 min-w-[160px] justify-center">
                     <template x-if="!isSaving">
                         <div class="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                stroke-linejoin="round" class="mr-2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
+                            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
                             <span>Save PDF</span>
                         </div>
                     </template>
@@ -177,9 +171,308 @@
                         </div>
                     </template>
                 </button>
+
+                <!-- User Profile & Sign Out -->
+                <div class="h-6 w-px bg-slate-200 ml-3"></div>
+                <div class="flex items-center space-x-3 ml-4 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+                    <div class="flex flex-col items-end">
+                        <span class="text-xs font-black text-slate-900 leading-tight"
+                            x-text="profile?.full_name || 'Staff'"></span>
+                        <span class="text-[9px] font-black uppercase tracking-widest text-blue-600 leading-none"
+                            x-text="profile?.role || 'User'"></span>
+                    </div>
+                    <button @click="signOut()"
+                        class="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                        title="Sign Out">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
+
+    <!-- Executive Dashboard Modal -->
+    <div x-show="showDashboard" style="display: none;"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900 no-print"
+        x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100">
+
+        <div class="bg-white w-full h-full flex flex-col overflow-hidden" @click.away="showDashboard = false"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="scale-105 opacity-0"
+            x-transition:enter-end="scale-100 opacity-100">
+
+            <!-- Header -->
+            <div class="px-10 py-8 bg-slate-900 text-white flex items-center justify-between relative overflow-hidden">
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl">
+                </div>
+                <div class="flex items-center space-x-5 relative z-10">
+                    <div
+                        class="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-500/20">
+                        <i data-lucide="layout-dashboard" class="w-8 h-8 text-white"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-3xl font-black heading-font tracking-tight">Executive Insights Hub</h2>
+                        <p class="text-slate-400 font-medium text-sm">Real-time business performance & revenue analytics
+                        </p>
+                    </div>
+                </div>
+                <button @click="showDashboard = false"
+                    class="p-3 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group relative z-10">
+                    <i data-lucide="x"
+                        class="w-6 h-6 text-white group-hover:rotate-90 transition-transform duration-300"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto p-10 bg-slate-50/50 space-y-10">
+
+                <!-- Main KPI Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div
+                        class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="p-2 bg-blue-50 rounded-xl text-blue-600"><i data-lucide="trending-up"
+                                    class="w-5 h-5"></i></span>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Monthly
+                                Revenue</span>
+                        </div>
+                        <h3 class="text-3xl font-black text-slate-900 mb-1"
+                            x-text="formatCurrency(dashboardStats.monthlyRevenue)"></h3>
+                        <p class="text-xs font-bold text-slate-400">Current Month Revenue</p>
+                    </div>
+
+                    <div
+                        class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="p-2 bg-indigo-50 rounded-xl text-indigo-600"><i data-lucide="calendar"
+                                    class="w-5 h-5"></i></span>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">FY
+                                Revenue</span>
+                        </div>
+                        <h3 class="text-3xl font-black text-slate-900 mb-1"
+                            x-text="formatCurrency(dashboardStats.annualRevenue)"></h3>
+                        <p class="text-xs font-bold text-slate-400"
+                            x-text="'Apr ' + new Date().getFullYear() + ' - Mar ' + (new Date().getFullYear() + 1)"></p>
+                    </div>
+
+                    <div
+                        class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-l-4 border-l-red-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="p-2 bg-red-50 rounded-xl text-red-600"><i data-lucide="clock"
+                                    class="w-5 h-5"></i></span>
+                            <span
+                                class="text-[10px] font-black uppercase tracking-widest text-slate-400">Outstanding</span>
+                        </div>
+                        <h3 class="text-3xl font-black text-red-600 mb-1"
+                            x-text="formatCurrency(dashboardStats.outstanding)">
+                        </h3>
+                        <p class="text-xs font-bold text-slate-400">Uncollected Payments</p>
+                    </div>
+
+                    <div
+                        class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-l-4 border-l-green-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="p-2 bg-green-50 rounded-xl text-green-600"><i data-lucide="check-circle"
+                                    class="w-5 h-5"></i></span>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Conversion
+                                Rate</span>
+                        </div>
+                        <h3 class="text-3xl font-black text-green-600 mb-1"
+                            x-text="dashboardStats.conversion.rate.toFixed(1) + '%'"></h3>
+                        <p class="text-xs font-bold text-slate-400"
+                            x-text="dashboardStats.conversion.invoices + ' Invoices from ' + dashboardStats.conversion.quotes + ' Quotes'">
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                    <!-- Top Customers -->
+                    <div
+                        class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                            <h3 class="text-xl font-black text-slate-800 flex items-center">
+                                <i data-lucide="users" class="w-5 h-5 mr-3 text-blue-500"></i>
+                                Top 5 Customers
+                            </h3>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">By Taxable
+                                Value</span>
+                        </div>
+                        <div class="p-8 space-y-4">
+                            <template x-for="(c, idx) in dashboardStats.topCustomers" :key="idx">
+                                <div
+                                    class="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100">
+                                    <div class="flex items-center space-x-4">
+                                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-500 text-xs"
+                                            x-text="idx + 1"></div>
+                                        <span class="font-bold text-slate-700" x-text="c.name"></span>
+                                    </div>
+                                    <span class="font-black text-slate-900" x-text="formatCurrency(c.value)"></span>
+                                </div>
+                            </template>
+                            <template x-if="dashboardStats.topCustomers.length === 0">
+                                <div class="text-center py-10 text-slate-400 italic">No customer data available yet.
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Collections Progress -->
+                    <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+                        <div class="p-8 border-b border-slate-50 bg-slate-50/50">
+                            <h3 class="text-xl font-black text-slate-800 flex items-center">
+                                <i data-lucide="pie-chart" class="w-5 h-5 mr-3 text-indigo-500"></i>
+                                Collections Status
+                            </h3>
+                        </div>
+                        <div class="p-10 flex flex-col items-center justify-center space-y-8">
+                            <div class="relative w-48 h-48 flex items-center justify-center">
+                                <svg class="w-full h-full transform -rotate-90">
+                                    <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="20"
+                                        fill="transparent" class="text-slate-100" />
+                                    <circle cx="96" cy="96" r="80" stroke="currentColor" stroke-width="20"
+                                        fill="transparent" :stroke-dasharray="2 * Math.PI * 80"
+                                        :stroke-dashoffset="2 * Math.PI * 80 * (1 - (dashboardStats.collected / (dashboardStats.collected + dashboardStats.outstanding || 1)))"
+                                        class="text-indigo-600 transition-all duration-1000" />
+                                </svg>
+                                <div class="absolute flex flex-col items-center">
+                                    <span class="text-3xl font-black text-slate-900"
+                                        x-text="(dashboardStats.collected / (dashboardStats.collected + dashboardStats.outstanding || 1) * 100).toFixed(0) + '%'"></span>
+                                    <span
+                                        class="text-[10px] font-black uppercase tracking-widest text-slate-400">Collected</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-8 w-full">
+                                <div class="text-center">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                                        Total Collected</p>
+                                    <p class="text-xl font-black text-green-600"
+                                        x-text="formatCurrency(dashboardStats.collected)"></p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                                        Total Outstanding</p>
+                                    <p class="text-xl font-black text-red-600"
+                                        x-text="formatCurrency(dashboardStats.outstanding)"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Ledger Tabs -->
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-2xl font-black text-slate-800 flex items-center">
+                            <i data-lucide="book-open" class="w-6 h-6 mr-3 text-blue-600"></i>
+                            Document Ledger
+                        </h3>
+                        <div class="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                            <template x-for="(docs, type) in dashboardStats.docsByType" :key="type">
+                                <button @click="dashboardStats.activeTab = type" :class="{
+                                        'px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all': true,
+                                        'bg-white text-blue-600 shadow-sm': dashboardStats.activeTab === type,
+                                        'text-slate-500 hover:text-slate-900': dashboardStats.activeTab !== type
+                                    }" x-text="type">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div
+                        class="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
+                        <template x-for="(docs, type) in dashboardStats.docsByType" :key="type">
+                            <div x-show="dashboardStats.activeTab === type"
+                                x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-y-4"
+                                x-transition:enter-end="opacity-100 translate-y-0">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left">
+                                        <thead>
+                                            <tr class="text-[10px] font-black uppercase text-slate-400 bg-slate-50/50">
+                                                <th class="px-8 py-4">Doc No.</th>
+                                                <th class="px-8 py-4">Date</th>
+                                                <th class="px-8 py-4">Customer</th>
+                                                <th class="px-8 py-4 text-right">Grand Total</th>
+                                                <th class="px-8 py-4 text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="text-sm">
+                                            <template x-for="doc in docs" :key="doc.number">
+                                                <tr
+                                                    class="border-t border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                                    <td class="px-8 py-4 font-bold text-slate-900" x-text="doc.number">
+                                                    </td>
+                                                    <td class="px-8 py-4 text-slate-500" x-text="doc.date"></td>
+                                                    <td class="px-8 py-4 font-medium text-slate-700"
+                                                        x-text="doc.customer"></td>
+                                                    <td class="px-8 py-4 text-right font-black text-slate-900"
+                                                        x-text="formatCurrency(doc.total)"></td>
+                                                    <td class="px-8 py-4 text-center">
+                                                        <span :class="{
+                                                            'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest': true,
+                                                            'bg-green-100 text-green-700': doc.status === 'PAID',
+                                                            'bg-amber-100 text-amber-700': doc.status !== 'PAID'
+                                                        }" x-text="doc.status || 'UNPAID'"></span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                            <template x-if="docs.length === 0">
+                                                <tr>
+                                                    <td colspan="5"
+                                                        class="px-8 py-20 text-center text-slate-400 italic">No
+                                                        documents found for this category.</td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Strategic Reminders -->
+                <div
+                    class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden group">
+                    <div
+                        class="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full translate-x-1/2 -translate-y-1/2 blur-3xl group-hover:scale-110 transition-transform duration-700">
+                    </div>
+                    <div class="flex items-center justify-between relative z-10">
+                        <div class="space-y-2">
+                            <h3 class="text-2xl font-black">Strategic Advice</h3>
+                            <p class="text-slate-400 font-medium">Insights based on your current business cycle</p>
+                        </div>
+                        <template x-if="dashboardStats.conversion.rate < 30">
+                            <div
+                                class="flex items-center space-x-3 bg-red-500/10 border border-red-500/20 px-6 py-3 rounded-2xl">
+                                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                <span class="font-bold text-red-400 text-sm">Low Quote Conversion. Review
+                                    Pricing!</span>
+                            </div>
+                        </template>
+                        <template x-if="dashboardStats.outstanding > dashboardStats.collected">
+                            <div
+                                class="flex items-center space-x-3 bg-amber-500/10 border border-amber-500/20 px-6 py-3 rounded-2xl">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                <span class="font-bold text-amber-400 text-sm">Action Needed: High Outstanding
+                                    Exposure.</span>
+                            </div>
+                        </template>
+                        <template
+                            x-if="dashboardStats.conversion.rate >= 30 && dashboardStats.outstanding <= dashboardStats.collected">
+                            <div
+                                class="flex items-center space-x-3 bg-green-500/10 border border-green-500/20 px-6 py-3 rounded-2xl">
+                                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                <span class="font-bold text-green-400 text-sm">Operations Healthy. Keep Scaling!</span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
 
     <!-- History Modal -->
     <div x-show="showHistory" style="display: none;"
@@ -229,6 +522,13 @@
                             <i data-lucide="arrow-right-circle" class="w-4 h-4"></i>
                         </button>
 
+                        <!-- Duplicate Button -->
+                        <button @click.stop="duplicateDoc(d)"
+                            class="absolute top-2 right-18 p-1.5 text-slate-300 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            style="right: 4.5rem;" title="Duplicate Document">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+
                         <div @click="loadHistoryDoc(index)" class="cursor-pointer">
                             <div class="flex items-center justify-between mb-2 pr-8">
                                 <span
@@ -243,7 +543,8 @@
 
                             <div class="flex items-center justify-between border-t border-slate-100 pt-2 mt-2">
                                 <span class="text-xs font-bold text-slate-500">Total:</span>
-                                <span class="font-black text-slate-800" x-text="((this.currencies.find(c => c.code === (d.currency || 'INR')) || {symbol:'₹'}).symbol) + ' ' + Number(d.items.reduce((sum, i) => { const taxable = (i.qty*i.rate) - ((d.type==='Quotation' ? (i.qty*i.rate*(i.discount||0)/100) : 0)); const rate = (i.taxRate !== undefined) ? i.taxRate : (d.taxRate !== undefined ? d.taxRate : 18); return sum + taxable + (taxable * (rate/100)); }, 0) + (Number(d.bankChargesAmount || 0))).toLocaleString(((this.currencies.find(c => c.code === (d.currency || 'INR')) || {locale:'en-IN'}).locale), {maximumFractionDigits:0})"></span>
+                                <span class="font-black text-slate-800"
+                                    x-text="((this.currencies.find(c => c.code === (d.currency || 'INR')) || {symbol:'₹'}).symbol) + ' ' + Number(d.items.reduce((sum, i) => { const taxable = (i.qty*i.rate) - ((d.type==='Quotation' ? (i.qty*i.rate*(i.discount||0)/100) : 0)); const rate = (i.taxRate !== undefined) ? i.taxRate : (d.taxRate !== undefined ? d.taxRate : 18); return sum + taxable + (taxable * (rate/100)); }, 0) + (Number(d.bankChargesAmount || 0))).toLocaleString(((this.currencies.find(c => c.code === (d.currency || 'INR')) || {locale:'en-IN'}).locale), {maximumFractionDigits:0})"></span>
                             </div>
                         </div>
                     </div>
@@ -277,38 +578,87 @@
 
             <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
                 <div class="mb-4">
+                    <h3 class="font-bold text-slate-800 mb-2">Company Details</h3>
+                    <div class="p-3 border rounded-lg space-y-2">
+                        <div>
+                            <label class="text-xs text-slate-500">Company Name</label>
+                            <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.name">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Tagline</label>
+                            <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.tagline">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Address Line 1</label>
+                            <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.address1">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Address Line 2</label>
+                            <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.address2">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-500">GSTIN</label>
+                                <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.gstin">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500">PAN</label>
+                                <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.pan">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-xs text-slate-500">Phone</label>
+                                <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.phone">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-500">Email</label>
+                                <input type="text" class="w-full border rounded px-2 py-1" x-model="doc.company.email">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
                     <h3 class="font-bold text-slate-800 mb-2">Default Bank Accounts</h3>
-                    <p class="text-sm text-slate-500 mb-3">Edit the default bank account details that will be applied to new documents or when you click "Apply to Document".</p>
+                    <p class="text-sm text-slate-500 mb-3">Edit the default bank account details that will be applied to
+                        new documents or when you click "Apply to Document".</p>
 
                     <div class="space-y-3">
                         <template x-for="code in ['USD','EUR']" :key="code">
                             <div class="p-3 border rounded-lg">
                                 <div class="flex items-center justify-between mb-2">
                                     <div class="font-bold">Default <span x-text="code"></span> Account</div>
-                                    <div class="text-xs text-slate-400">Visible when currency is <span x-text="code"></span></div>
+                                    <div class="text-xs text-slate-400">Visible when currency is <span
+                                            x-text="code"></span></div>
                                 </div>
                                 <div class="space-y-2">
                                     <div>
                                         <label class="text-xs text-slate-500">Name</label>
-                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].name">
+                                        <input type="text" class="w-full border rounded px-2 py-1"
+                                            x-model="globalBanks[code].name">
                                     </div>
                                     <div>
                                         <label class="text-xs text-slate-500">Bank</label>
-                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].bankName">
+                                        <input type="text" class="w-full border rounded px-2 py-1"
+                                            x-model="globalBanks[code].bankName">
                                     </div>
                                     <div class="grid grid-cols-2 gap-2">
                                         <div>
                                             <label class="text-xs text-slate-500">Branch</label>
-                                            <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].branch">
+                                            <input type="text" class="w-full border rounded px-2 py-1"
+                                                x-model="globalBanks[code].branch">
                                         </div>
                                         <div>
                                             <label class="text-xs text-slate-500">Acc. Number</label>
-                                            <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].acc">
+                                            <input type="text" class="w-full border rounded px-2 py-1"
+                                                x-model="globalBanks[code].acc">
                                         </div>
                                     </div>
                                     <div>
                                         <label class="text-xs text-slate-500">IFSC / SWIFT</label>
-                                        <input type="text" class="w-full border rounded px-2 py-1" x-model="globalBanks[code].ifsc">
+                                        <input type="text" class="w-full border rounded px-2 py-1"
+                                            x-model="globalBanks[code].ifsc">
                                     </div>
                                 </div>
                             </div>
@@ -318,39 +668,566 @@
 
                 <div class="flex items-center space-x-3">
                     <button @click="saveGlobalBanks()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-                    <button @click="applyGlobalBanksToDoc()" class="bg-green-600 text-white px-4 py-2 rounded">Apply to Document</button>
                     <button @click="resetGlobalBanks()" class="text-sm text-red-600">Reset to Samples</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- GST Compliance Dashboard -->
+    <div x-show="showGstDashboard" style="display: none;"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm no-print p-4">
+
+        <div class="bg-white w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            @click.away="showGstDashboard = false" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95">
+
+            <!-- Header -->
+            <div class="px-8 py-6 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-blue-500 p-3 rounded-2xl">
+                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-black heading-font">GST Compliance Center</h2>
+                        <p class="text-slate-400 text-sm font-medium">Indian GST Returns & Compliance Management</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="px-4 py-2 bg-slate-800 rounded-xl border border-slate-700 flex items-center space-x-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-xs font-bold uppercase tracking-wider"
+                            x-text="gstSettings.taxpayerType"></span>
+                    </div>
+                    <button @click="showGstDashboard = false"
+                        class="p-2 hover:bg-slate-800 rounded-xl transition-colors">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs Navigation -->
+            <div class="flex bg-slate-50 border-b border-slate-200 px-8">
+                <button @click="gstView = 'returns'"
+                    :class="gstView === 'returns' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="px-6 py-4 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+                    <i data-lucide="file-plus" class="w-4 h-4"></i>
+                    <span>Tax Returns</span>
+                </button>
+                <button @click="gstView = 'calendar'"
+                    :class="gstView === 'calendar' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="px-6 py-4 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                    <span>Compliance Calendar</span>
+                </button>
+                <button @click="gstView = 'settings'"
+                    :class="gstView === 'settings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="px-6 py-4 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+                    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                    <span>Registration & Types</span>
+                </button>
+                <button @click="gstView = 'history'"
+                    :class="gstView === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                    class="px-6 py-4 border-b-2 font-bold text-sm transition-all flex items-center space-x-2">
+                    <i data-lucide="history" class="w-4 h-4"></i>
+                    <span>Filing History</span>
+                </button>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div class="flex-1 overflow-y-auto p-8 bg-slate-50/30">
+
+                <!-- Returns Tab -->
+                <template x-if="gstView === 'returns'">
+                    <div class="space-y-6">
+                        <!-- Summary Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                <p class="text-slate-500 text-xs font-bold uppercase mb-2">Total Taxable Value</p>
+                                <h3 class="text-2xl font-black text-slate-900"
+                                    x-text="formatCurrency(getGstDashboardStats().totalTaxable)"></h3>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                <p class="text-slate-500 text-xs font-bold uppercase mb-2">Total GST Collected</p>
+                                <h3 class="text-2xl font-black text-blue-600"
+                                    x-text="formatCurrency(getGstDashboardStats().totalGst)"></h3>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                <p class="text-slate-500 text-xs font-bold uppercase mb-2">B2B Invoices</p>
+                                <h3 class="text-2xl font-black text-slate-900" x-text="getGstDashboardStats().b2bCount">
+                                </h3>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                <p class="text-slate-500 text-xs font-bold uppercase mb-2">B2C Invoices</p>
+                                <h3 class="text-2xl font-black text-slate-900" x-text="getGstDashboardStats().b2cCount">
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <!-- GSTR-1 Card -->
+                            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                                    <h3 class="font-black">GSTR-1 (Sales Return)</h3>
+                                    <span
+                                        class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 font-bold uppercase">Critical</span>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div
+                                        class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="bg-white p-2 rounded-xl shadow-sm"><i data-lucide="file-text"
+                                                    class="w-5 h-5 text-slate-600"></i></div>
+                                            <div>
+                                                <p class="text-xs font-bold text-slate-500 uppercase">Current Month</p>
+                                                <p class="font-bold text-slate-900">January 2026</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-[10px] font-bold text-red-500 uppercase">Due Date</p>
+                                            <p class="font-bold text-slate-900"
+                                                x-text="calculateGstDueDate('GSTR-1', 'Feb', 2026, gstSettings.filingFrequency) + ' Feb 2026'">
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-slate-600 leading-relaxed">
+                                        Includes details of all B2B and B2C outward supplies. This forms the basis for
+                                        your liability and your recipient's credit.
+                                    </p>
+                                    <button @click="showGstr1Details = !showGstr1Details"
+                                        class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                        <span
+                                            x-text="showGstr1Details ? 'Hide Invoice Details' : 'View Invoice Details'"></span>
+                                    </button>
+                                    <button @click="generateGstr1Json()"
+                                        class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="download" class="w-4 h-4"></i>
+                                        <span>Download GSTR-1 Portal JSON</span>
+                                    </button>
+                                    <button @click="exportGstr1Excel()"
+                                        class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                        <span>Download GSTR-1 Excel</span>
+                                    </button>
+                                    <button @click="saveGstReturn('GSTR-1', 'DRAFT')"
+                                        class="w-full py-2 text-xs font-bold text-slate-500 hover:text-blue-600 transition-all">
+                                        Save Draft Record
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- GSTR-3B Card -->
+                            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                                    <h3 class="font-black">GSTR-3B (Summary Return)</h3>
+                                    <span
+                                        class="text-[10px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 font-bold uppercase">Tax
+                                        Payment</span>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div
+                                        class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="bg-white p-2 rounded-xl shadow-sm"><i data-lucide="credit-card"
+                                                    class="w-5 h-5 text-slate-600"></i></div>
+                                            <div>
+                                                <p class="text-xs font-bold text-slate-500 uppercase">Current Month</p>
+                                                <p class="font-bold text-slate-900">January 2026</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-[10px] font-bold text-red-500 uppercase">Due Date</p>
+                                            <p class="font-bold text-slate-900">20th Feb 2026</p>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-slate-600 leading-relaxed">
+                                        Summary of inward and outward supplies along with the input tax credit (ITC).
+                                        Final tax payment is calculated here.
+                                    </p>
+                                    <button @click="showGstr3bPortal = !showGstr3bPortal"
+                                        class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                        <span
+                                            x-text="showGstr3bPortal ? 'Hide Portal View' : 'View GSTR-3B Portal View'"></span>
+                                    </button>
+                                    <button @click="generateGstr3bJson()"
+                                        class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="download" class="w-4 h-4"></i>
+                                        <span>Download GSTR-3B Summary JSON</span>
+                                    </button>
+                                    <button @click="exportGstr3bExcel()"
+                                        class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
+                                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                        <span>Download GSTR-3B Excel</span>
+                                    </button>
+                                    <button @click="saveGstReturn('GSTR-3B', 'DRAFT')"
+                                        class="w-full py-2 text-xs font-bold text-slate-500 hover:text-blue-600 transition-all">
+                                        Save Draft Record
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detailed Table (Conditional) -->
+                        <div x-show="showGstr1Details" x-transition
+                            class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden mt-8">
+                            <div class="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <h3 class="font-black text-slate-900 uppercase tracking-tight">GSTR-1 Draft Details</h3>
+                            </div>
+                            <div class="p-6 overflow-x-auto">
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Section 4A,
+                                    4B, 4C, 6B, 6C - B2B Invoices</h4>
+                                <table class="w-full text-left border-collapse mb-8">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                            <th class="pb-3 px-2">Invoice No</th>
+                                            <th class="pb-3 px-2">Date</th>
+                                            <th class="pb-3 px-2">Customer Name</th>
+                                            <th class="pb-3 px-2">GSTIN</th>
+                                            <th class="pb-3 px-2 text-right">Taxable Value</th>
+                                            <th class="pb-3 px-2 text-right">GST Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-[11px] font-medium text-slate-700">
+                                        <template x-for="item in getGstr1Details().b2b">
+                                            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-2 font-bold" x-text="item.number"></td>
+                                                <td class="py-3 px-2" x-text="formatDate(item.date)"></td>
+                                                <td class="py-3 px-2" x-text="item.name"></td>
+                                                <td class="py-3 px-2" x-text="item.gstin"></td>
+                                                <td class="py-3 px-2 text-right font-bold"
+                                                    x-text="formatCurrency(item.taxable)"></td>
+                                                <td class="py-3 px-2 text-right font-bold text-blue-600"
+                                                    x-text="formatCurrency(item.gst)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Section 7 -
+                                    B2C (Others)</h4>
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                            <th class="pb-3 px-2">Place of Supply</th>
+                                            <th class="pb-3 px-2">Rate (%)</th>
+                                            <th class="pb-3 px-2 text-right">Taxable Value</th>
+                                            <th class="pb-3 px-2 text-right">IGST</th>
+                                            <th class="pb-3 px-2 text-right">CGST</th>
+                                            <th class="pb-3 px-2 text-right">SGST</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-[11px] font-medium text-slate-700">
+                                        <template x-for="item in getGstr1Details().b2c">
+                                            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-2 font-bold" x-text="item.pos"></td>
+                                                <td class="py-3 px-2" x-text="item.rt + '%'"></td>
+                                                <td class="py-3 px-2 text-right font-bold"
+                                                    x-text="formatCurrency(item.txval)"></td>
+                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.iamt)">
+                                                </td>
+                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.camt)">
+                                                </td>
+                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.samt)">
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- GSTR-3B Portal View (Conditional) -->
+                        <div x-show="showGstr3bPortal" x-transition
+                            class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden mt-8">
+                            <div class="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <h3 class="font-black text-slate-900 uppercase tracking-tight">GSTR-3B Official Portal
+                                    Snapshot
+                                </h3>
+                            </div>
+                            <div class="p-6 space-y-8">
+                                <div>
+                                    <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">3.1
+                                        Details of
+                                        Outward Supplies and inward supplies liable to reverse charge</h4>
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr
+                                                class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                                <th class="py-3 px-2">Nature of Supplies</th>
+                                                <th class="py-3 px-2 text-right">Total Taxable Value</th>
+                                                <th class="py-3 px-2 text-right">IGST</th>
+                                                <th class="py-3 px-2 text-right">CGST</th>
+                                                <th class="py-3 px-2 text-right">SGST/UTGST</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="text-[11px] font-bold text-slate-700">
+                                            <tr class="border-b border-slate-50">
+                                                <td class="py-3 px-2" x-text="getGstr3bPortalData().table31.a.label">
+                                                </td>
+                                                <td class="py-3 px-2 text-right"
+                                                    x-text="formatCurrency(getGstr3bPortalData().table31.a.val)"></td>
+                                                <td class="py-3 px-2 text-right"
+                                                    x-text="formatCurrency(getGstr3bPortalData().table31.a.tax)"></td>
+                                                <td class="py-3 px-2 text-right"
+                                                    x-text="formatCurrency(getGstr3bPortalData().table31.a.tax / 2)">
+                                                </td>
+                                                <td class="py-3 px-2 text-right"
+                                                    x-text="formatCurrency(getGstr3bPortalData().table31.a.tax / 2)">
+                                                </td>
+                                            </tr>
+                                            <template x-for="row in ['b','c','d','e']">
+                                                <tr class="border-b border-slate-50 text-slate-400 font-normal">
+                                                    <td class="py-3 px-2"
+                                                        x-text="getGstr3bPortalData().table31[row].label">
+                                                    </td>
+                                                    <td class="py-3 px-2 text-right">0.00</td>
+                                                    <td class="py-3 px-2 text-right">0.00</td>
+                                                    <td class="py-3 px-2 text-right">0.00</td>
+                                                    <td class="py-3 px-2 text-right">0.00</td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="pt-8 border-t border-slate-100">
+                                    <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">4.
+                                        Eligible ITC
+                                    </h4>
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr
+                                                class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                                <th class="py-3 px-2">Details</th>
+                                                <th class="py-3 px-2 text-right">Total ITC</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="text-[11px] font-bold text-slate-700">
+                                            <template x-for="row in ['a','b','c','d']">
+                                                <tr class="border-b border-slate-50"
+                                                    :class="row === 'a' || row === 'c' ? '' : 'text-slate-400 font-normal'">
+                                                    <td class="py-3 px-2"
+                                                        x-text="getGstr3bPortalData().table4[row].label"></td>
+                                                    <td class="py-3 px-2 text-right">0.00</td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Calendar Tab -->
+                <template x-if="gstView === 'calendar'">
+                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
+                        <h3 class="text-xl font-black text-slate-900 mb-6 flex items-center">
+                            <i data-lucide="bell" class="w-6 h-6 mr-2 text-blue-600"></i>
+                            Compliance Deadlines (Feb 2026)
+                        </h3>
+                        <div class="space-y-4">
+                            <div
+                                class="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border-l-8 border-blue-600">
+                                <div>
+                                    <h4 class="font-black text-slate-900">GSTR-1 Filing</h4>
+                                    <p class="text-sm text-slate-500">Statement of outward supplies for Jan 2026</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-2xl font-black text-slate-900"
+                                        x-text="calculateGstDueDate('GSTR-1', 'Feb', 2026, gstSettings.filingFrequency)">
+                                    </p>
+                                    <p class="text-xs font-bold text-blue-600 uppercase">Upcoming</p>
+                                </div>
+                            </div>
+                            <div
+                                class="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border-l-8 border-amber-500">
+                                <div>
+                                    <h4 class="font-black text-slate-900">GSTR-3B Filing</h4>
+                                    <p class="text-sm text-slate-500">Summary return and payment of tax for Jan 2026</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-2xl font-black text-slate-900">20 Feb</p>
+                                    <p class="text-xs font-bold text-red-500 uppercase">Mandatory</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Settings Tab -->
+                <template x-if="gstView === 'settings'">
+                    <div class="max-w-xl mx-auto space-y-8">
+                        <div class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
+                            <h3 class="text-xl font-black text-slate-900 mb-6">Taxpayer Registration</h3>
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-600 mb-2">GST Registration
+                                        Type</label>
+                                    <select x-model="gstSettings.taxpayerType"
+                                        class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all">
+                                        <option value="Regular">Regular Taxpayer</option>
+                                        <option value="Composition">Composition Scheme</option>
+                                        <option value="TDS/TCS">TDS/TCS Registered</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-600 mb-2">Filing Frequency</label>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <button @click="gstSettings.filingFrequency = 'Monthly'"
+                                            :class="gstSettings.filingFrequency === 'Monthly' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-500'"
+                                            class="py-4 rounded-2xl font-black transition-all">Monthly</button>
+                                        <button @click="gstSettings.filingFrequency = 'Quarterly'"
+                                            :class="gstSettings.filingFrequency === 'Quarterly' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-500'"
+                                            class="py-4 rounded-2xl font-black transition-all">Quarterly (QRMP)</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Filing History Tab -->
+                <template x-if="gstView === 'history'">
+                    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                            <h3 class="font-black text-slate-900 uppercase tracking-tight">Persistent Return Registry
+                            </h3>
+                        </div>
+                        <div class="p-0 overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-[10px] font-black uppercase text-slate-500 bg-slate-50/50">
+                                        <th class="py-4 px-6 border-b border-slate-100">Return Type</th>
+                                        <th class="py-4 px-6 border-b border-slate-100">Period</th>
+                                        <th class="py-4 px-6 border-b border-slate-100">Status</th>
+                                        <th class="py-4 px-6 border-b border-slate-100">Date Saved</th>
+                                        <th class="py-4 px-6 border-b border-slate-100 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-xs font-medium text-slate-700">
+                                    <template x-for="rec in gstHistory">
+                                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                            <td class="py-4 px-6">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="w-2 h-2 rounded-full"
+                                                        :class="rec.type === 'GSTR-1' ? 'bg-blue-500' : 'bg-amber-500'"></span>
+                                                    <span class="font-bold text-slate-900" x-text="rec.type"></span>
+                                                </div>
+                                            </td>
+                                            <td class="py-4 px-6" x-text="rec.period"></td>
+                                            <td class="py-4 px-6">
+                                                <span class="px-2 py-1 rounded-full text-[10px] font-black uppercase"
+                                                    :class="rec.status === 'FILED' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'"
+                                                    x-text="rec.status"></span>
+                                            </td>
+                                            <td class="py-4 px-6 text-slate-500" x-text="formatDate(rec.created_at)">
+                                            </td>
+                                            <td class="py-4 px-6 text-right">
+                                                <button @click="viewGstReturnDetail(rec)"
+                                                    class="text-blue-600 hover:text-blue-800 font-bold">View
+                                                    Detail</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="gstHistory.length === 0">
+                                        <tr>
+                                            <td colspan="5" class="py-12 text-center text-slate-400 font-bold italic">
+                                                No records found in the registry. Click "Save Draft" on a return to
+                                                start
+                                                tracking.
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+
+                            <!-- HSN Summary Section -->
+                            <div class="mt-8 pt-8 border-t border-slate-100">
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Section 12
+                                    -
+                                    HSN-wise Summary of Outward Supplies</h4>
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                            <th class="pb-3 px-2">HSN/SAC</th>
+                                            <th class="pb-3 px-2">Description</th>
+                                            <th class="pb-3 px-2 text-right">Qty</th>
+                                            <th class="pb-3 px-2 text-right">Taxable Value</th>
+                                            <th class="pb-3 px-2 text-right">IGST</th>
+                                            <th class="pb-3 px-2 text-right">CGST/SGST</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-[11px] font-medium text-slate-700">
+                                        <template x-for="item in getHsnSummary()">
+                                            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-2 font-bold" x-text="item.hsn"></td>
+                                                <td class="py-3 px-2 text-slate-500" x-text="item.desc"></td>
+                                                <td class="py-3 px-2 text-right" x-text="item.qty"></td>
+                                                <td class="py-3 px-2 text-right font-bold"
+                                                    x-text="formatCurrency(item.taxable)"></td>
+                                                <td class="py-3 px-2 text-right font-bold text-blue-600"
+                                                    x-text="formatCurrency(item.iamt)"></td>
+                                                <td class="py-3 px-2 text-right font-bold text-slate-400"
+                                                    x-text="formatCurrency(item.camt)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+            </div>
+        </div>
+    </div>
+
     <main class="max-w-[1400px] mx-auto px-4 py-6">
         <!-- Document Type Buttons -->
-        <div class="no-print mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="no-print mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <button @click="setDocType('Quotation')"
                 :class="doc.type === 'Quotation' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
-                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2">
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
                 <i data-lucide="file-text" class="w-4 h-4"></i>
                 <span>Quotation</span>
             </button>
             <button @click="setDocType('Proforma Invoice')"
                 :class="doc.type === 'Proforma Invoice' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
-                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2">
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
                 <i data-lucide="file-check" class="w-4 h-4"></i>
                 <span>Proforma</span>
             </button>
             <button @click="setDocType('Tax Invoice')"
                 :class="doc.type === 'Tax Invoice' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
-                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2">
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
                 <i data-lucide="file-check-2" class="w-4 h-4"></i>
                 <span>Tax Invoice</span>
             </button>
             <button @click="setDocType('Delivery Challan')"
                 :class="doc.type === 'Delivery Challan' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
-                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2">
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
                 <i data-lucide="truck" class="w-4 h-4"></i>
                 <span>Challan</span>
+            </button>
+            <button @click="setDocType('Credit Note')"
+                :class="doc.type === 'Credit Note' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
+                <i data-lucide="minus-square" class="w-4 h-4"></i>
+                <span>Credit Note</span>
+            </button>
+            <button @click="setDocType('Debit Note')"
+                :class="doc.type === 'Debit Note' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-2 ring-blue-600 ring-offset-2' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'"
+                class="py-3 px-4 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 text-xs">
+                <i data-lucide="plus-square" class="w-4 h-4"></i>
+                <span>Debit Note</span>
             </button>
         </div>
 
@@ -358,6 +1235,13 @@
 
             <!-- Editor Section -->
             <div class="lg:w-1/3 no-print space-y-6 overflow-y-auto max-h-[calc(100vh-200px)] pr-2">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <input type="text" placeholder="Enter Document Number" x-model="searchNumber"
+                        class="border px-3 py-1 rounded w-64" />
+                    <button @click="loadDocumentByNumber()" class="bg-blue-600 text-white px-3 py-1 rounded">
+                        Load
+                    </button>
+                </div>
 
                 <!-- Document Type & Meta -->
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -380,10 +1264,21 @@
                                 <div class="relative">
                                     <input type="text" x-model="doc.number" @blur="checkDuplicateNumber()"
                                         class="w-full border border-slate-200 rounded-lg px-3 py-2 pr-10 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
-                                    <button @click="getNextNumber()" type="button" title="Get Next Number"
-                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
-                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                    </button>
+                                </div>
+                                <div x-show="doc.type === 'Quotation'" class="mt-2 flex items-center space-x-2">
+                                    <span class="text-xs font-bold text-slate-500 uppercase">Revision:</span>
+                                    <div class="flex items-center -space-x-px">
+                                        <button @click="doc.revision = Math.max(0, doc.revision - 1); applyRevision()"
+                                            class="p-1 border border-slate-200 rounded-l hover:bg-slate-50 text-slate-600">
+                                            <i data-lucide="minus" class="w-3 h-3"></i>
+                                        </button>
+                                        <div class="border-y border-slate-200 px-3 py-0.5 text-xs font-bold text-blue-600 bg-blue-50/50"
+                                            x-text="'R' + doc.revision"></div>
+                                        <button @click="doc.revision++; applyRevision()"
+                                            class="p-1 border border-slate-200 rounded-r hover:bg-slate-50 text-slate-600">
+                                            <i data-lucide="plus" class="w-3 h-3"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div>
@@ -644,6 +1539,35 @@
                                 </div>
                             </div>
                         </template>
+                        <template x-if="doc.type === 'Credit Note' || doc.type === 'Debit Note'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">Original Invoice
+                                        No.</label>
+                                    <input type="text" x-model="doc.originalInvoiceNo"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">Original Invoice
+                                        Date</label>
+                                    <input type="date" x-model="doc.originalInvoiceDate"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">Reason for
+                                        Issue</label>
+                                    <select x-model="doc.reasonForIssue"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <option value="">Select Reason</option>
+                                        <option value="Sales Return">Sales Return</option>
+                                        <option value="Post Sales Discount">Post Sales Discount</option>
+                                        <option value="Deficiency in services">Deficiency in services</option>
+                                        <option value="Correction in Invoice">Correction in Invoice</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -733,22 +1657,22 @@
                                         <div>
                                             <label class="text-[10px] text-slate-500 uppercase">HSN</label>
                                             <input type="text" x-model="item.hsn"
-                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm input-focus-effect">
                                         </div>
                                         <div>
                                             <label class="text-[10px] text-slate-500 uppercase">Qty</label>
                                             <input type="number" x-model="item.qty"
-                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm input-focus-effect">
                                         </div>
                                         <div>
                                             <label class="text-[10px] text-slate-500 uppercase">Rate</label>
                                             <input type="number" x-model="item.rate"
-                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm input-focus-effect">
                                         </div>
                                         <div>
                                             <label class="text-[10px] text-slate-500 uppercase">Tax %</label>
                                             <select x-model.number="item.taxRate"
-                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm input-focus-effect">
                                                 <option value="0">0%</option>
                                                 <option value="5">5%</option>
                                                 <option value="18">18%</option>
@@ -758,7 +1682,7 @@
                                         <div x-show="doc.type === 'Quotation'">
                                             <label class="text-[10px] text-slate-500 uppercase">Disc %</label>
                                             <input type="number" x-model="item.discount"
-                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm">
+                                                class="w-full bg-transparent border-b border-slate-200 outline-none py-1 text-sm input-focus-effect">
                                         </div>
                                     </div>
                                 </div>
@@ -784,7 +1708,8 @@
                             <div class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold"
                                 x-text="getCurrencySymbol()"></div>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1">Fixed bank charge applied for selected currency. Editable per document.</p>
+                        <p class="text-xs text-slate-400 mt-1">Fixed bank charge applied for selected currency. Editable
+                            per document.</p>
                     </div>
                     <div class="space-y-4">
                         <div>
@@ -861,41 +1786,40 @@
                         <div class="flex justify-between items-start mb-4 border-b-4 border-teal-600 pb-2">
                             <div class="flex-1">
                                 <div class="flex items-center space-x-3">
-                                    <img src="laga-name.png" alt="LaGa Systems Pvt Ltd — House of Scientific Softwares" class="h-14 object-contain">
+                                    <img src="laga-name.png" alt="LaGa Systems Pvt Ltd — House of Scientific Softwares"
+                                        class="h-14 object-contain">
                                     <span class="sr-only">LaGa Systems Pvt Ltd — House of Scientific Softwares</span>
                                 </div>
                                 <div class="mt-2 text-slate-700">
-                                    <p>3rd Floor, Plot No.: 246, Above Central Bank of India</p>
-                                    <p>Road No.:78, Jubilee Hills, Hyderabad 500 033 India</p>
-                                    <p>CIN: U72200TG2007PTC053444</p>
+                                    <p x-text="doc.company.address1"></p>
+                                    <p x-text="doc.company.address2"></p>
+                                    <p>CIN: <span x-text="doc.company.cin"></span></p>
                                     <div class="flex items-center space-x-3 mt-1 text-[11px] font-medium">
                                         <div class="flex items-center space-x-1">
                                             <i data-lucide="phone" class="w-3 h-3 text-slate-500"></i>
-                                            <span>+91 40 23549924/8905</span>
+                                            <span x-text="doc.company.phone"></span>
                                         </div>
                                         <span class="text-slate-300">|</span>
                                         <div class="flex items-center space-x-1">
                                             <i data-lucide="globe" class="w-3 h-3 text-slate-500"></i>
-                                            <span>www.lagasys.com</span>
+                                            <span x-text="doc.company.website"></span>
                                         </div>
                                         <span class="text-slate-300">|</span>
                                         <div class="flex items-center space-x-1">
                                             <i data-lucide="mail" class="w-3 h-3 text-slate-500"></i>
-                                            <span>info@lagasys.com</span>
+                                            <span x-text="doc.company.email"></span>
                                         </div>
                                         <span class="text-slate-300">|</span>
                                         <div class="flex items-center space-x-1">
                                             <i data-lucide="building" class="w-3 h-3 text-slate-500"></i>
-                                            <span>UDYAM-TS-02-0010670</span>
+                                            <span x-text="doc.company.udyam"></span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="text-right flex flex-col items-end">
-                                <!-- Logo Image -->
                                 <div class="w-16 h-16 flex items-center justify-center mb-1">
-                                    <img src="logo.png" alt="LaGa Systems Logo"
-                                        class="max-w-full max-h-full object-contain">
+                                    <img src="logo.png" alt="Company Logo" class="max-w-full max-h-full object-contain">
                                 </div>
                             </div>
                         </div>
@@ -903,8 +1827,8 @@
                         <!-- Doc Title and PAN -->
                         <div class="grid grid-cols-3 border border-black mb-4 items-center">
                             <div class="p-1 border-r border-black font-bold text-[10px] leading-tight">
-                                <div>GST No: 36AABCL2941H1ZN</div>
-                                <div>PAN No: AABCL2941H</div>
+                                <div>GST No: <span x-text="doc.company.gstin"></span></div>
+                                <div>PAN No: <span x-text="doc.company.pan"></span></div>
                             </div>
                             <div class="p-1 border-r border-black text-center font-bold text-base uppercase"
                                 x-text="doc.customTitle || doc.type">TAX INVOICE</div>
@@ -941,13 +1865,13 @@
                             <div class="grid grid-cols-2">
                                 <div class="p-1 border-r border-b border-black">
                                     <p class="font-medium text-[9px] text-slate-500"
-                                        x-text="doc.type == 'Quotation' ? 'Quotation No.' : (doc.type == 'Proforma Invoice' ? 'Proforma No.' : (doc.type === 'Tax Invoice' ? 'Invoice No.' : 'Challan No.'))">
+                                        x-text="doc.type == 'Quotation' ? 'Quotation No.' : (doc.type == 'Proforma Invoice' ? 'Proforma No.' : (doc.type === 'Tax Invoice' ? 'Invoice No.' : (doc.type === 'Credit Note' ? 'Credit Note No.' : (doc.type === 'Debit Note' ? 'Debit Note No.' : 'Challan No.'))))">
                                     </p>
                                     <p class="font-bold" x-text="doc.number"></p>
                                 </div>
                                 <div class="p-1 border-b border-black">
                                     <p class="font-medium text-[9px] text-slate-500"
-                                        x-text="doc.type == 'Quotation' ? 'Quotation Date' : (doc.type == 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))">
+                                        x-text="doc.type == 'Quotation' ? 'Quotation Date' : (doc.type == 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : (doc.type === 'Credit Note' ? 'Credit Note Date' : (doc.type === 'Debit Note' ? 'Debit Note Date' : 'Challan Date'))))">
                                     </p>
                                     <p class="font-bold" x-text="formatDate(doc.date)"></p>
                                 </div>
@@ -993,6 +1917,26 @@
                                             </p>
                                         </div>
                                         <div class="p-1" x-show="doc.type !== 'Delivery Challan'">
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="['Credit Note', 'Debit Note'].includes(doc.type)">
+                                    <div class="contents">
+                                        <div class="p-1 border-r border-b border-black">
+                                            <p class="font-medium text-[9px] text-slate-500">Original Invoice No.</p>
+                                            <p class="font-bold" x-text="doc.originalInvoiceNo || '-'"></p>
+                                        </div>
+                                        <div class="p-1 border-b border-black">
+                                            <p class="font-medium text-[9px] text-slate-500">Original Invoice Date</p>
+                                            <p class="font-bold"
+                                                x-text="doc.originalInvoiceDate ? formatDate(doc.originalInvoiceDate) : '-'">
+                                            </p>
+                                        </div>
+                                        <div class="p-1 border-r border-black">
+                                            <p class="font-medium text-[9px] text-slate-500">Reason for Issue</p>
+                                            <p class="font-bold" x-text="doc.reasonForIssue || '-'"></p>
+                                        </div>
+                                        <div class="p-1">
                                         </div>
                                     </div>
                                 </template>
@@ -1129,7 +2073,9 @@
                                     </template>
                                     <tr class="border-b border-black" x-show="bankChargesValue() > 0">
                                         <td class="p-1 text-left font-bold">Bank Charges</td>
-                                        <td class="p-1" x-text="getCurrencySymbol() + ' ' + formatCurrency(bankChargesValue())"></td>
+                                        <td class="p-1"
+                                            x-text="getCurrencySymbol() + ' ' + formatCurrency(bankChargesValue())">
+                                        </td>
                                     </tr>
                                     <tr class="border-b border-black">
                                         <td class="p-1 text-left font-bold">Total Tax</td>
@@ -1150,8 +2096,8 @@
                                     <p class="mb-8 font-bold text-slate-800">Certified that the particulars given above
                                         are
                                         true and correct.</p>
-                                    <p class="font-bold text-slate-900 border-t border-black pt-1">For LaGa Systems Pvt
-                                        Ltd
+                                    <p class="font-bold text-slate-900 border-t border-black pt-1">For <span
+                                            x-text="doc.company.name"></span>
                                     </p>
                                     <div class="mt-2 flex flex-col items-center min-h-[80px] justify-end relative">
                                         <div class="flex items-end justify-center space-x-4 mb-2 relative">
@@ -1194,878 +2140,165 @@
                             </ol>
                         </div>
 
+                        <!-- Audit Trailer -->
+                        <!-- Audit Trailer -->
                         <div class="text-center mt-2 font-bold text-slate-600" x-show="doc.type === 'Quotation'">Thank
                             you
                             for your consideration, and we
-                            eagerly anticipate the opportunity to fulfil your esteemed order!</div>
+                            eagerly anticipate the opportunity to fulfil your esteemed order!
+                        </div>
+                        <div
+                            class="mt-4 pt-2 border-t border-slate-100 flex flex-col items-end text-[8px] font-medium text-slate-400 italic">
+                            <span x-text="getAuditStamp()"></span>
+
+                        </div>
+
+
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- GST Return Detail Modal -->
+        <div x-show="showGstHistoryDetail"
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200"
+                @click.away="showGstHistoryDetail = false">
+
+                <!-- Modal Header -->
+                <div class="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div>
+                        <div class="flex items-center space-x-3 mb-1">
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase"
+                                :class="selectedGstReturn?.type === 'GSTR-1' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'"
+                                x-text="selectedGstReturn?.type"></span>
+                            <h2 class="text-2xl font-black text-slate-900"
+                                x-text="'Return for ' + selectedGstReturn?.period"></h2>
+                        </div>
+                        <p class="text-slate-500 text-sm font-medium"
+                            x-text="'Saved on ' + formatDate(selectedGstReturn?.created_at)"></p>
+                    </div>
+                    <button @click="showGstHistoryDetail = false"
+                        class="p-3 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
+                        <i data-lucide="x" class="w-6 h-6 text-slate-400"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Content -->
+                <div class="p-8 overflow-y-auto flex-1 space-y-8 bg-slate-50/20">
+
+                    <!-- GSTR-1 View -->
+                    <template x-if="selectedGstReturn?.type === 'GSTR-1'">
+                        <div class="space-y-6">
+                            <!-- B2B Table -->
+                            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                                    <h3 class="font-black text-xs uppercase text-slate-500">B2B Invoices</h3>
+                                </div>
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                                            <th class="py-3 px-6">Invoice</th>
+                                            <th class="py-3 px-6">GSTIN</th>
+                                            <th class="py-3 px-6 text-right">Taxable</th>
+                                            <th class="py-3 px-6 text-right">GST</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-xs font-bold text-slate-700">
+                                        <template x-for="inv in selectedGstReturn?.data?.details?.b2b">
+                                            <tr class="border-b border-slate-50">
+                                                <td class="py-3 px-6" x-text="inv.number"></td>
+                                                <td class="py-3 px-6 x-text='inv.gstin'"></td>
+                                                <td class="py-3 px-6 text-right" x-text="formatCurrency(inv.taxable)">
+                                                </td>
+                                                <td class="py-3 px-6 text-right" x-text="formatCurrency(inv.gst)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- HSN Table -->
+                            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                                    <h3 class="font-black text-xs uppercase text-slate-500">Section 12 - HSN Summary
+                                    </h3>
+                                </div>
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                                            <th class="py-3 px-6">HSN</th>
+                                            <th class="py-3 px-6 text-right">Qty</th>
+                                            <th class="py-3 px-6 text-right">Taxable</th>
+                                            <th class="py-3 px-6 text-right">Tax</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-xs font-bold text-slate-700">
+                                        <template x-for="h in selectedGstReturn?.data?.hsn">
+                                            <tr class="border-b border-slate-50">
+                                                <td class="py-3 px-6" x-text="h.hsn"></td>
+                                                <td class="py-3 px-6 text-right" x-text="h.qty"></td>
+                                                <td class="py-3 px-6 text-right" x-text="formatCurrency(h.taxable)">
+                                                </td>
+                                                <td class="py-3 px-6 text-right"
+                                                    x-text="formatCurrency(h.iamt + h.camt + h.samt)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- GSTR-3B View -->
+                    <template x-if="selectedGstReturn?.type === 'GSTR-3B'">
+                        <div class="space-y-6">
+                            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                                    <h3 class="font-black text-xs uppercase text-slate-500">Table 3.1 - Outward Supplies
+                                    </h3>
+                                </div>
+                                <div class="p-6">
+                                    <div class="flex justify-between items-center py-4 border-b border-slate-50">
+                                        <span class="text-slate-600 font-bold">Total Taxable Value</span>
+                                        <span class="text-xl font-black text-slate-900"
+                                            x-text="formatCurrency(selectedGstReturn?.data?.table31?.a?.val)"></span>
+                                    </div>
+                                    <div class="flex justify-between items-center py-4">
+                                        <span class="text-slate-600 font-bold">Integrated Tax (IGST)</span>
+                                        <span class="text-xl font-black text-blue-600"
+                                            x-text="formatCurrency(selectedGstReturn?.data?.table31?.a?.tax)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+                    <button @click="showGstHistoryDetail = false"
+                        class="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all">Close
+                        Viewer</button>
+                </div>
+            </div>
+        </div>
     </main>
-
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script>
-        function billApp() {
-            return {
-                isSaving: false,
-                doc: {
-                    settings: {
-                        showSignature: true,
-                        showCompanyStamp: true,
-                        showRevenueStamp: true
-                    },
-                    type: 'Quotation',
-                    customTitle: '',
-                    number: 'LGS-QTN-2026-001',
-                    currency: 'INR',
-                    date: new Date().toISOString().split('T')[0],
-                    validityDate: '',
-                    paymentTerms: '100% Advance',
-                    deliveryTime: '2-3 Working Days',
-                    deliveryMode: 'Courier / By Hand',
-                    subject: 'AERMOD View AMC for One Year',
-                    reference: 'To your email enquiry Dated 03rd April 2025',
-                    challanNo: '',
-                    challanDate: '',
-                    transport: '',
-                    vehicleNo: '',
-                    poNumber: '',
-                    poDate: '',
-                    dueDate: '',
-                    customer: {
-                        name: 'LaGa Systems Pvt Ltd',
-                        address: 'Plot No 246, Road No 78, Jubilee Hills, Hyderabad - 500033',
-                        gstin: '36AABCL2941H1ZN',
-                        state: 'Telangana',
-                        pan: ''
-                    },
-                    items: [
-                        { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0, taxRate: 18 }
-                    ],
-                    // Legacy single bank kept for compatibility; primary bank for INR
-                    bank: {
-                        name: 'LAGA SYSTEMS PVT LTD',
-                        bankName: 'Axis Bank',
-                        branch: 'Hyderabad Main Branch (Begumpet)',
-                        acc: '008010200057114',
-                        ifsc: 'UTIB0000008'
-                    },
-
-                    // Map of bank accounts per currency (INR, USD, EUR)
-                    banks: {
-                        INR: {
-                            name: 'LAGA SYSTEMS PVT LTD',
-                            bankName: 'Axis Bank',
-                            branch: 'Hyderabad Main Branch (Begumpet)',
-                            acc: '008010200057114',
-                            ifsc: 'UTIB0000008'
-                        },
-                        USD: {
-                            name: 'LAGA SYSTEMS PVT LTD',
-                            bankName: 'Sample USD Bank',
-                            branch: 'NY Branch',
-                            acc: '',
-                            ifsc: ''
-                        },
-                        EUR: {
-                            name: 'LAGA SYSTEMS PVT LTD',
-                            bankName: 'Sample EUR Bank',
-                            branch: 'Frankfurt Branch',
-                            acc: '',
-                            ifsc: ''
-                        }
-                    },
-
-                    // Fixed bank charges (editable per document). Default applied when currency is USD/EUR.
-                    bankChargesAmount: 0,
-                    bankChargesEditable: true,
-                    tnc: [
-                        'Subject to Hyderabad Jurisdiction.',
-                        'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
-                        'The above price doesn\'t include Installation and Training.'
-                    ],
-                    // Tax rate (percent) used for IGST / CGST / SGST calculations. Default: 18%
-                    taxRate: 18
-                },
-
-                currencies: [
-                    { code: 'INR', name: 'Indian Rupee', symbol: '₹', locale: 'en-IN' },
-                    { code: 'USD', name: 'US Dollar', symbol: '$', locale: 'en-US' },
-                    { code: 'EUR', name: 'Euro', symbol: '€', locale: 'de-DE' }
-                ],
-
-                sequences: {},
-
-                masterData: {
-                    customers: [
-                        { name: 'Client A', address: '123 Street, City', gstin: '36ABCDE1234F1Z1', state: 'Telangana', pan: 'ABCDE1234F' },
-                        { name: 'Client B', address: '456 Avenue, Town', gstin: '27FGHIJ5678K2Z2', state: 'Maharashtra', pan: 'FGHIJ5678K' }
-                    ],
-                    products: [
-                        { desc: 'AERMOD View Software', hsn: '997331', rate: 150000, taxRate: 18 },
-                        { desc: 'Maintenance Service', hsn: '998711', rate: 25000, taxRate: 18 }
-                    ]
-                },
-
-                // Allowed GST slabs (after Sep 22, 2025): 0%, 5%, 18%, 40%
-                allowedTaxSlabs: [0, 5, 18, 40],
-
-                // Normalize tax rate value to the nearest allowed slab (returns number)
-                normalizeTaxRate(val) {
-                    const slabs = (this.allowedTaxSlabs || [0, 5, 18, 40]).map(Number);
-                    let n = Number(val);
-                    if (!isFinite(n)) return 18; // default
-                    // Find nearest slab
-                    return slabs.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a));
-                },
-
-
-                addItem() {
-                    this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate || 18) });
-                    this.$nextTick(() => lucide.createIcons());
-                },
-
-
-                removeItem(index) {
-                    this.doc.items.splice(index, 1);
-                },
-
-                addTnc() {
-                    this.doc.tnc.push('');
-                },
-
-                removeTnc(index) {
-                    this.doc.tnc.splice(index, 1);
-                },
-
-                selectCustomerObj(c) {
-                    this.doc.customer = { ...c };
-                },
-
-                selectProductObj(index, p) {
-                    this.doc.items[index].desc = p.desc;
-                    this.doc.items[index].hsn = p.hsn;
-                    this.doc.items[index].rate = p.rate;
-                    // If product defines a taxRate, use it for the specific item; otherwise fallback to document taxRate
-                    this.doc.items[index].taxRate = this.normalizeTaxRate((p.taxRate !== undefined) ? p.taxRate : (this.doc.taxRate || 18));
-                },
-
-
-                selectCustomer(e) {
-                    const selected = this.masterData.customers.find(c => c.name === e.target.value);
-                    if (selected) {
-                        this.doc.customer = { ...selected };
-                    }
-                },
-
-                selectProduct(index, e) {
-                    const selected = this.masterData.products.find(p => p.desc === e.target.value);
-                    if (selected) {
-                        this.doc.items[index].desc = selected.desc;
-                        this.doc.items[index].hsn = selected.hsn;
-                        this.doc.items[index].rate = selected.rate;
-                    }
-                },
-
-                setDocType(type) {
-                    this.doc.type = type;
-                    this.doc.customTitle = ''; // Reset custom title on type switch
-                    let prefix = 'LGS-QTN';
-                    if (type === 'Proforma Invoice') prefix = 'LGS-PI';
-                    if (type === 'Tax Invoice') prefix = 'LGS-TI';
-
-                    if (type === 'Delivery Challan') {
-                        prefix = 'LGS-DC';
-                        this.doc.tnc = ['Subject to Hyderabad Jurisdiction.'];
-                    } else {
-                        this.doc.tnc = [
-                            'Subject to Hyderabad Jurisdiction.',
-                            'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
-                            'The above price doesn\'t include Installation and Training.'
-                        ];
-                    }
-                    this.doc.number = `${prefix}-2026-001`;
-                },
-
-                // Smart Numbering Functions
-                getNextNumber() {
-                    const type = this.doc.type;
-                    const prefix = this.getDocPrefix(type);
-                    const year = new Date().getFullYear();
-
-                    // Get last used number for this type
-                    const key = `${type}-${year}`;
-                    const lastNum = this.sequences[key] || 0;
-                    const nextNum = lastNum + 1;
-
-                    this.doc.number = `${prefix}-${year}-${String(nextNum).padStart(3, '0')}`;
-
-                    // Update sequence
-                    this.sequences[key] = nextNum;
-                    this.saveSequences();
-
-                    this.$nextTick(() => lucide.createIcons());
-                },
-
-                checkDuplicateNumber() {
-                    const currentNum = this.doc.number;
-                    const duplicate = this.savedDocs.find(d => d.number === currentNum);
-                    if (duplicate) {
-                        alert(`⚠️ Warning: Document number "${currentNum}" already exists in history!\n\nDocument: ${duplicate.type}\nCustomer: ${duplicate.customer.name}\nDate: ${duplicate.date}`);
-                    }
-                },
-
-                getDocPrefix(type) {
-                    if (type === 'Quotation') return 'LGS-QTN';
-                    if (type === 'Proforma Invoice') return 'LGS-PI';
-                    if (type === 'Tax Invoice') return 'LGS-TI';
-                    if (type === 'Delivery Challan') return 'LGS-DC';
-                    return 'LGS-DOC';
-                },
-
-                loadSequences() {
-                    const saved = localStorage.getItem('laga_sequences');
-                    if (saved) {
-                        try {
-                            this.sequences = JSON.parse(saved);
-                        } catch (e) {
-                            console.error('Failed to load sequences', e);
-                            this.sequences = {};
-                        }
-                    }
-                },
-
-                saveSequences() {
-                    localStorage.setItem('laga_sequences', JSON.stringify(this.sequences));
-                },
-
-                saveToMaster(type) {
-                    if (type === 'customer') {
-                        const exists = this.masterData.customers.findIndex(c => c.name === this.doc.customer.name);
-                        if (exists >= 0) {
-                            this.masterData.customers[exists] = { ...this.doc.customer };
-                        } else {
-                            this.masterData.customers.push({ ...this.doc.customer });
-                        }
-                    } else if (type === 'product') {
-                        this.doc.items.forEach(item => {
-                            if (item.desc) {
-                                const exists = this.masterData.products.findIndex(p => p.desc === item.desc);
-                                if (exists >= 0) {
-                                    this.masterData.products[exists] = { desc: item.desc, hsn: item.hsn, rate: item.rate };
-                                } else {
-                                    this.masterData.products.push({ desc: item.desc, hsn: item.hsn, rate: item.rate });
-                                }
-                            }
-                        });
-                    }
-                    this.saveMasterData();
-                    alert(`${type.charAt(0).toUpperCase() + type.slice(1)} saved to Master Data!`);
-                },
-
-                saveMasterData() {
-                    localStorage.setItem('laga_master_data', JSON.stringify(this.masterData));
-                },
-
-                loadMasterData() {
-                    const saved = localStorage.getItem('laga_master_data');
-                    if (saved) {
-                        this.masterData = JSON.parse(saved);
-                    }
-                },
-
-                // Global Banks Settings (defaults applied when creating or updating docs)
-                saveGlobalBanks() {
-                    try {
-                        localStorage.setItem('laga_global_banks', JSON.stringify(this.globalBanks));
-                        alert('Global bank defaults saved.');
-                    } catch (e) {
-                        console.error('Failed to save global banks', e);
-                        alert('Failed to save settings.');
-                    }
-                },
-
-                loadGlobalBanks() {
-                    const saved = localStorage.getItem('laga_global_banks');
-                    if (saved) {
-                        try {
-                            this.globalBanks = JSON.parse(saved);
-                        } catch (e) {
-                            console.error('Failed to load global banks', e);
-                        }
-                    }
-                },
-
-                resetGlobalBanks() {
-                    if (!confirm('Reset global bank defaults to sample values?')) return;
-                    this.globalBanks = {
-                        USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
-                        EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
-                    };
-                    this.saveGlobalBanks();
-                },
-
-                // Apply global defaults to current document banks (overwrites per-currency bank entries)
-                applyGlobalBanksToDoc() {
-                    if (!confirm('Apply global bank defaults to current document? This will overwrite the document\'s per-currency bank details.')) return;
-                    this.doc.banks = { ...this.doc.banks, ...JSON.parse(JSON.stringify(this.globalBanks)) };
-                    this.saveCurrentDoc();
-                    alert('Global banks applied to current document.');
-                },
-
-
-                saveCurrentDoc() {
-                    localStorage.setItem('laga_current_doc', JSON.stringify(this.doc));
-                },
-
-                // --- History / Saved Docs Logic ---
-                savedDocs: [],
-                showHistory: false,
-
-                // Settings panel state for global defaults
-                showSettings: false,
-                globalBanks: {
-                    USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
-                    EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
-                },
-
-
-                loadHistory() {
-                    const saved = localStorage.getItem('laga_saved_docs');
-                    if (saved) {
-                        try {
-                            this.savedDocs = JSON.parse(saved);
-                        } catch (e) {
-                            console.error("Failed to load history", e);
-                            this.savedDocs = [];
-                        }
-                    }
-                },
-
-                saveHistoryToStorage() {
-                    localStorage.setItem('laga_saved_docs', JSON.stringify(this.savedDocs));
-                },
-
-                saveDocToHistory() {
-                    // check if doc with same number already exists
-                    const idx = this.savedDocs.findIndex(d => d.number === this.doc.number);
-                    const docToSave = JSON.parse(JSON.stringify(this.doc)); // deep copy
-                    docToSave.savedAt = new Date().toISOString();
-
-                    if (idx >= 0) {
-                        if (confirm('Document with this number already exists. Overwrite?')) {
-                            this.savedDocs[idx] = docToSave;
-                            alert('Document updated in History.');
-                        } else {
-                            return; // User cancelled
-                        }
-                    } else {
-                        this.savedDocs.unshift(docToSave);
-                        alert('Document saved to History.');
-                    }
-                    this.saveHistoryToStorage();
-                },
-
-                loadHistoryDoc(index) {
-                    if (confirm('Load this document? Unsaved changes in current document will be lost.')) {
-                        this.doc = JSON.parse(JSON.stringify(this.savedDocs[index]));
-                        this.showHistory = false;
-                        this.saveCurrentDoc(); // Update current session
-                    }
-                },
-
-                deleteHistoryDoc(index) {
-                    if (confirm('Are you sure you want to delete this specific saved record?')) {
-                        this.savedDocs.splice(index, 1);
-                        this.saveHistoryToStorage();
-                    }
-                },
-                // ----------------------------------
-
-                loadCurrentDoc() {
-                    const saved = localStorage.getItem('laga_current_doc');
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-
-                            // If legacy single bank exists and no per-currency banks, migrate it
-                            if (parsed && parsed.bank && !parsed.banks) {
-                                parsed.banks = {
-                                    INR: parsed.bank,
-                                    USD: parsed.banks && parsed.banks.USD ? parsed.banks.USD : { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
-                                    EUR: parsed.banks && parsed.banks.EUR ? parsed.banks.EUR : { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
-                                };
-                            }
-
-                            // Merge with default to ensure new fields are present
-                            this.doc = { ...this.doc, ...parsed };
-
-                            // Normalize doc-level taxRate to allowed slabs (protect against old values)
-                            this.doc.taxRate = this.normalizeTaxRate(this.doc.taxRate !== undefined ? this.doc.taxRate : 18);
-
-                        } catch (e) {
-                            console.error("Failed to load current doc", e);
-                        }
-                    }
-                },
-
-
-                resetDoc() {
-                    if (confirm('Are you sure you want to clear this document and start fresh?')) {
-                        // Reset everything to empty for a "blank" document
-                        this.doc.number = '';
-                        this.doc.settings = { showSignature: true, showCompanyStamp: true, showRevenueStamp: true };
-                        this.doc.date = new Date().toISOString().split('T')[0];
-                        this.doc.validityDate = '';
-                        this.doc.paymentTerms = '';
-                        this.doc.deliveryTime = '';
-                        this.doc.deliveryMode = '';
-                        this.doc.subject = '';
-                        this.doc.reference = '';
-                        this.doc.poNumber = '';
-                        this.doc.poDate = '';
-                        this.doc.dueDate = '';
-                        this.doc.customer = {
-                            name: '',
-                            address: '',
-                            gstin: '',
-                            state: '',
-                            pan: ''
-                        };
-                        // Normalize and set document-level taxRate and items
-                        this.doc.taxRate = this.normalizeTaxRate(this.doc.taxRate !== undefined ? this.doc.taxRate : 18);
-                        this.doc.items = [
-                            { desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate) }
-                        ];
-
-                        // Set standard terms based on type
-                        if (this.doc.type === 'Delivery Challan') {
-                            this.doc.tnc = ['Subject to Hyderabad Jurisdiction.'];
-                        } else {
-                            this.doc.tnc = [
-                                'Subject to Hyderabad Jurisdiction.',
-                                'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
-                                'The above price doesn\'t include Installation and Training.'
-                            ];
-                        }
-
-                        // Force save current session as blank
-                        this.saveCurrentDoc();
-
-                        // Set the document number to the first one based on type
-                        this.$nextTick(() => {
-                            const value = this.doc.type;
-                            let prefix = 'LGS-QTN';
-                            if (value === 'Proforma Invoice') prefix = 'LGS-PI';
-                            if (value === 'Tax Invoice') prefix = 'LGS-TI';
-                            if (value === 'Delivery Challan') prefix = 'LGS-DC';
-                            this.doc.number = `${prefix}-2026-001`;
-                            this.saveCurrentDoc();
-                        });
-                    }
-                },
-
-                itemTaxableValue(item) {
-                    const amount = (Number(item.qty) * Number(item.rate));
-                    const discountAmt = (this.doc.type === 'Quotation') ? amount * (Number(item.discount || 0) / 100) : 0;
-                    return amount - discountAmt;
-                },
-
-                itemTaxAmount(item) {
-                    const ratePercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                    const rateFraction = ratePercent / 100;
-                    return this.itemTaxableValue(item) * rateFraction;
-                },
-
-                itemTotal(item) {
-                    return this.itemTaxableValue(item) + this.itemTaxAmount(item);
-                },
-
-                hasDiscount() {
-                    return this.doc.items.some(item => Number(item.discount) > 0);
-                },
-
-                subTotal() {
-                    return this.doc.items.reduce((sum, item) => sum + this.itemTaxableValue(item), 0);
-                },
-
-                isInterstate() {
-                    const state = (this.doc.customer.state || '').toLowerCase();
-                    return !state.includes('telangana');
-                },
-
-                cgstAmount() {
-                    if (this.isInterstate()) return 0;
-                    return this.doc.items.reduce((sum, item) => {
-                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
-                    }, 0);
-                },
-
-                sgstAmount() {
-                    if (this.isInterstate()) return 0;
-                    return this.doc.items.reduce((sum, item) => {
-                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
-                    }, 0);
-                },
-
-                igstAmount() {
-                    if (!this.isInterstate()) return 0;
-                    return this.doc.items.reduce((sum, item) => {
-                        const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                        return sum + (this.itemTaxableValue(item) * (taxPercent / 100));
-                    }, 0);
-                },
-
-                taxAmount() {
-                    return this.cgstAmount() + this.sgstAmount() + this.igstAmount();
-                },
-
-                // Bank charges fixed amount (per document)
-                bankChargesValue() {
-                    return Number(this.doc.bankChargesAmount || 0);
-                },
-
-                grandTotalRaw() {
-                    return this.subTotal() + this.taxAmount() + this.bankChargesValue();
-                },
-
-                roundOff() {
-                    return Math.round(this.grandTotalRaw()) - this.grandTotalRaw();
-                },
-
-                grandTotal() {
-                    return Math.round(this.grandTotalRaw());
-                },
-
-                totalQty() {
-                    return this.doc.items.reduce((sum, item) => sum + Number(item.qty), 0);
-                },
-
-                formatCurrency(num) {
-                    const curr = this.currencies.find(c => c.code === (this.doc.currency || 'INR'));
-                    const locale = curr ? curr.locale : 'en-IN';
-                    return Number(num).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                },
-
-                getCurrencySymbol() {
-                    const curr = this.currencies.find(c => c.code === (this.doc.currency || 'INR'));
-                    return curr ? curr.symbol : '₹';
-                },
-
-                // Returns bank object for the currently selected currency (falls back to legacy doc.bank)
-                bankForCurrency() {
-                    if (this.doc && this.doc.banks && this.doc.banks[this.doc.currency]) return this.doc.banks[this.doc.currency];
-                    return this.doc.bank || { name: '', bankName: '', acc: '', branch: '', ifsc: '' };
-                },
-
-                formatDate(dateStr) {
-                    if (!dateStr) return '';
-                    const parts = dateStr.split('-');
-                    if (parts.length !== 3) return dateStr;
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                },
-
-                // Format percentage neatly: integer percentages show without decimals (e.g., '40%'),
-                // otherwise show up to 2 decimals (e.g., '2.50%')
-                formatPercent(p) {
-                    const n = Number(p);
-                    if (!isFinite(n)) return '';
-                    return Number.isInteger(n) ? `${n}%` : `${n.toFixed(2)}%`;
-                },
-
-                // Format split percent for CGST/SGST display e.g., '9% + 9%' or '2.50% + 2.50%'
-                formatSplitPercent(p) {
-                    const n = Number(p);
-                    if (!isFinite(n)) return '';
-                    const half = n / 2;
-                    const halfStr = Number.isInteger(half) ? `${half}%` : `${half.toFixed(2)}%`;
-                    return `${halfStr} + ${halfStr}`;
-                },
-
-                // Returns a single tax rate if all items share the same slab, otherwise null
-                summaryTaxRate() {
-                    if (!Array.isArray(this.doc.items) || this.doc.items.length === 0) return null;
-                    const rates = Array.from(new Set(this.doc.items.map(i => Number(i.taxRate !== undefined ? i.taxRate : (this.doc.taxRate || 18)))));
-                    return rates.length === 1 ? rates[0] : null;
-                },
-
-                async savePDF() {
-                    this.isSaving = true;
-                    const element = document.getElementById('document-preview');
-                    const fileName = (this.doc.number || 'Document').replace(/[/\\?%*:|"<>]/g, '_') + '.pdf';
-
-                    // Update document title anyway as a secondary measure
-                    const oldTitle = document.title;
-                    document.title = fileName.replace('.pdf', '');
-
-                    try {
-                        if (typeof html2pdf === 'undefined') {
-                            throw new Error('PDF Library not loaded');
-                        }
-
-                        const opt = {
-                            margin: [0, 0, 0, 0], // Strict no margin
-                            filename: fileName,
-                            image: { type: 'png', quality: 1.0 },
-                            html2canvas: {
-                                scale: 3,
-                                useCORS: true,
-                                letterRendering: true,
-                                scrollY: 0
-                            },
-                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-                        };
-
-                        await html2pdf().set(opt).from(element).save();
-                    } catch (err) {
-                        console.error('PDF Generation failed:', err);
-                        // Fallback to print if library fails
-                        window.print();
-                    } finally {
-                        this.isSaving = false;
-                        // Restore title after a delay
-                        setTimeout(() => document.title = oldTitle, 2000);
-                    }
-                },
-
-                printDoc() {
-                    const oldTitle = document.title;
-                    document.title = (this.doc.number || 'Document');
-                    window.print();
-                    setTimeout(() => document.title = oldTitle, 2000);
-                },
-
-                init() {
-                    lucide.createIcons();
-                    this.loadMasterData();
-                    this.loadGlobalBanks();
-                    this.loadCurrentDoc();
-                    this.loadHistory();
-                    this.loadSequences();
-
-                    // Ensure doc.banks has entries from global defaults when missing
-                    if (!this.doc.banks) this.doc.banks = {};
-                    ['USD','EUR','INR'].forEach(code => {
-                        if (!this.doc.banks[code]) this.doc.banks[code] = JSON.parse(JSON.stringify(this.globalBanks[code] || this.doc.bank || {}));
-                    });
-
-
-                    // Normalize tax rates for existing items and master products to allowed GST slabs
-                    if (Array.isArray(this.doc.items)) {
-                        this.doc.items.forEach(item => {
-                            item.taxRate = this.normalizeTaxRate(item.taxRate !== undefined ? item.taxRate : this.doc.taxRate || 18);
-                        });
-                    }
-                    if (this.masterData && Array.isArray(this.masterData.products)) {
-                        this.masterData.products.forEach(p => {
-                            p.taxRate = this.normalizeTaxRate(p.taxRate !== undefined ? p.taxRate : this.doc.taxRate || 18);
-                        });
-                    }
-
-                    // Apply initial bank charges default based on current currency (USD/EUR)
-                    if (['USD','EUR'].includes(this.doc.currency) && (!this.doc.bankChargesAmount || Number(this.doc.bankChargesAmount) === 0)) {
-                        this.doc.bankChargesAmount = 63;
-                    }
-
-                    // Watch for any change in doc and auto-save
-                    this.$watch('doc', () => {
-                        this.saveCurrentDoc();
-                    }, { deep: true });
-
-                    // Add watcher for dynamic document numbering
-                    this.$watch('doc.type', (value) => {
-                        const currentNumber = this.doc.number || '';
-                        const parts = currentNumber.split('-');
-                        const sequential = parts.length > 0 ? parts[parts.length - 1] : '001';
-
-                        let prefix = 'LGS-QTN';
-                        if (value === 'Proforma Invoice') prefix = 'LGS-PI';
-                        if (value === 'Tax Invoice') prefix = 'LGS-TI';
-                        if (value === 'Delivery Challan') prefix = 'LGS-DC';
-
-                        this.doc.number = `${prefix}-2026-${sequential}`;
-                    });
-
-                    // Re-initialize Lucide icons when history sidebar opens
-                    this.$watch('showHistory', (value) => {
-                        if (value) {
-                            this.$nextTick(() => {
-                                lucide.createIcons();
-                            });
-                        }
-                    });
-
-                    // Watch for currency changes to set default bank charges for USD/EUR
-                    this.$watch('doc.currency', (value) => {
-                        const setCurrencies = ['USD','EUR'];
-                        if (setCurrencies.includes(value)) {
-                            // Apply default only if it's currently zero/empty
-                            if (!this.doc.bankChargesAmount || Number(this.doc.bankChargesAmount) === 0) {
-                                this.doc.bankChargesAmount = 63;
-                            }
-                        } else {
-                            // Clear bank charges for other currencies
-                            this.doc.bankChargesAmount = 0;
-                        }
-                    });
-                },
-
-                numberToWords(n, currencyCode = 'INR') {
-                    if (n < 0) return "Negative " + this.numberToWords(-n, currencyCode);
-
-                    const curr = (this.currencies || []).find(c => c.code === (currencyCode || 'INR'));
-                    let currencyWord = 'RUPEES';
-                    if (curr && curr.name) {
-                        // Use last word of currency name and make it plural (simple heuristic)
-                        const parts = curr.name.split(' ');
-                        let last = parts[parts.length - 1].toUpperCase();
-                        if (!last.endsWith('S')) last = last + 'S';
-                        currencyWord = last;
-                    }
-
-                    if (n === 0) return `ZERO ${currencyWord} ONLY`;
-
-                    const single = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
-                    const double = ["TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
-                    const tens = ["", "TEN", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
-
-                    const format = (n, suffix) => {
-                        if (n === 0) return "";
-                        let str = "";
-                        if (n > 99) {
-                            str += single[Math.floor(n / 100)] + " HUNDRED ";
-                            n %= 100;
-                        }
-                        if (n > 19) {
-                            str += tens[Math.floor(n / 10)] + " ";
-                            n %= 10;
-                        }
-                        if (n > 9) {
-                            str += double[n - 10] + " ";
-                        } else if (n > 0) {
-                            str += single[n] + " ";
-                        }
-                        return str + suffix + " ";
-                    };
-
-                    let res = "";
-                    res += format(Math.floor(n / 10000000), "CRORE");
-                    res += format(Math.floor((n / 100000) % 100), "LAKH");
-                    res += format(Math.floor((n / 1000) % 100), "THOUSAND");
-                    res += format(Math.floor(n % 1000), "");
-
-                    return (res.trim() + ` ${currencyWord} ONLY`).replace(/\s+/g, ' ');
-                },
-
-                // --- New Features Logic ---
-
-                exportData() {
-                    const data = {
-                        masterData: this.masterData,
-                        savedDocs: this.savedDocs,
-                        // Not exporting 'doc' as it's the current temp state
-                        backupDate: new Date().toISOString()
-                    };
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `billgen_backup_${new Date().toISOString().slice(0, 10)}.json`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                },
-
-                importData(event) {
-                    const file = event.target.files[0];
-                    if (!file) return;
-
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const data = JSON.parse(e.target.result);
-                            if (confirm(`Found backup from ${new Date(data.backupDate).toLocaleDateString()}. \nThis will OVERWRITE your current saved Customers, Products, and History. Continue?`)) {
-                                if (data.masterData) {
-                                    this.masterData = data.masterData;
-                                    this.saveMasterData();
-                                }
-                                if (data.savedDocs) {
-                                    this.savedDocs = data.savedDocs;
-                                    this.saveHistoryToStorage();
-                                }
-                                alert('Data restored successfully! The page will now reload.');
-                                window.location.reload();
-                            }
-                        } catch (err) {
-                            alert('Error parsing backup file. Please ensure it is a valid JSON file exported from this app.');
-                            console.error(err);
-                        }
-                    };
-                    reader.readAsText(file);
-                    // Reset input so same file can be selected again if needed
-                    event.target.value = '';
-                },
-
-                convertHistoryDoc(savedDoc) {
-                    if (confirm(`Convert Quotation ${savedDoc.number} to a new Tax Invoice?`)) {
-                        // Deep copy the quotation
-                        const newDoc = JSON.parse(JSON.stringify(savedDoc));
-
-                        // Transform to Tax Invoice
-                        newDoc.type = 'Tax Invoice';
-                        newDoc.date = new Date().toISOString().split('T')[0];
-
-                        // Reset doc number to next available Invoice Number
-                        // We use a temporary logic to trigger the watcher or set defaults
-                        // But since we are loading it directly, let's manually generate the TI number logic
-                        const prefix = 'LGS-TI';
-                        newDoc.number = `${prefix}-2026-001`; // Best guess, user should check sequence
-
-                        // Clear Quote specific fields if they don't apply, 
-                        // but usually payment terms etc are useful to keep.
-                        // We definitely need to ensure revenue stamp is enabled by default for TI
-                        if (!newDoc.settings) newDoc.settings = {};
-                        newDoc.settings.showRevenueStamp = true;
-                        newDoc.settings.showCompanyStamp = true;
-                        newDoc.settings.showSignature = true;
-
-                        this.doc = newDoc;
-                        this.showHistory = false;
-
-                        // Trigger recalculation/save
-                        this.saveCurrentDoc();
-
-                        alert('Converted to Tax Invoice! Please check the Invoice Number sequence.');
-                    }
-                },
-
-                openEmailClient() {
-                    const customerName = this.doc.customer.name || 'Customer';
-                    const number = this.doc.number || 'Draft';
-                    const type = this.doc.type;
-                    const subject = encodeURIComponent(`${type} #${number} from LaGa Systems Pvt Ltd`);
-
-                    const total = this.grandTotal();
-                    const amountStr = this.formatCurrency(total);
-
-                    const body = encodeURIComponent(
-                        `Dear ${customerName},\n\n` +
-                        `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
-                        `Kindly review and process at your earliest convenience.\n\n` +
-                        `Regards,\n` +
-                        `LaGa Systems Pvt Ltd\n` +
-                        `Hyderabad`
-                    );
-
-                    window.open(`mailto:?subject=${subject}&body=${body}`);
-                }
-            }
-        }
+        window.supabase = supabase.createClient(
+            'https://gwoihyinysixdjfruobk.supabase.co',
+            'sb_publishable_gtomxhUKvqap_H8PnW2qYw_ms952Ne6'
+        );
     </script>
+
+    <script src="app.js"></script>
 </body>
 
 </html>
