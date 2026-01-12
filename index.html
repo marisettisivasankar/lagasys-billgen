@@ -380,8 +380,8 @@
                         </div>
                     </div>
 
-                    <div
-                        class="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
+                    <div class="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]"
+                        x-effect="dashboardStats.activeTab; ledgerControls.search; ledgerControls.startDate; ledgerControls.endDate; dashboardStats.docsByType; $nextTick(() => lucide.createIcons())">
                         <template x-for="(docs, type) in dashboardStats.docsByType" :key="type">
                             <div x-show="dashboardStats.activeTab === type"
                                 x-transition:enter="transition ease-out duration-200"
