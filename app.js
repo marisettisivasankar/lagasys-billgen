@@ -16,6 +16,11 @@ function billApp() {
             docsByType: {},
             activeTab: 'Tax Invoice'
         },
+        ledgerControls: {
+            search: '',
+            startDate: '',
+            endDate: ''
+        },
         savedDocs: [],
         showGstDashboard: false,
         gstView: 'returns', // 'returns', 'calendar', 'reports'
@@ -28,6 +33,8 @@ function billApp() {
         showGstr3bPortal: false,
         selectedGstReturn: null,
         showGstHistoryDetail: false,
+        showDocViewer: false,
+        viewDoc: null,
         gstSettings: {
             taxpayerType: 'Regular', // 'Regular', 'Composition', 'TDS/TCS'
             filingFrequency: 'Monthly', // 'Monthly', 'Quarterly'
@@ -147,6 +154,7 @@ function billApp() {
 
         async init() {
             lucide.createIcons();
+            this.showGstHistoryDetail = false; // Force close on load
             console.log('App Init: Checking Auth Session...');
 
             // Listen for Auth changes
@@ -1120,9 +1128,9 @@ function billApp() {
                     rate: 0
                 },
                 docsByType: {
-                    'Tax Invoice': [],
                     'Quotation': [],
                     'Proforma Invoice': [],
+                    'Tax Invoice': [],
                     'Delivery Challan': [],
                     'Credit Note': [],
                     'Debit Note': []
@@ -1170,12 +1178,26 @@ function billApp() {
                 if (!newStats.docsByType[doc.type]) {
                     newStats.docsByType[doc.type] = [];
                 }
+                // Smart Status Logic
+                let displayStatus = doc.status || 'UNPAID';
+                const now = new Date();
+
+                if (doc.type === 'Tax Invoice' && displayStatus !== 'PAID' && doc.dueDate) {
+                    if (new Date(doc.dueDate) < now) displayStatus = 'OVERDUE';
+                }
+
+                if (doc.type === 'Quotation' && doc.validityDate) {
+                    if (new Date(doc.validityDate) < now) displayStatus = 'EXPIRED';
+                }
+
                 newStats.docsByType[doc.type].push({
+                    id: doc.id,
                     number: doc.number,
                     customer: doc.customer.name || 'Unknown',
                     date: doc.date,
                     total: totals.total,
-                    status: doc.status
+                    status: displayStatus,
+                    raw: doc // For operations
                 });
             });
 
@@ -1187,7 +1209,7 @@ function billApp() {
 
             // Calculate Conversion Rate
             if (newStats.conversion.quotes > 0) {
-                newStats.conversion.rate = (newStats.conversion.invoices / newStats.conversion.quotes) * 100;
+                newStats.conversion.rate = Math.round((newStats.conversion.invoices / newStats.conversion.quotes) * 100);
             }
 
             this.dashboardStats = newStats;
@@ -1197,6 +1219,88 @@ function billApp() {
             if (types.length > 0 && !types.includes(this.dashboardStats.activeTab)) {
                 this.dashboardStats.activeTab = types[0];
             }
+        },
+
+        loadDocForView(id) {
+            const doc = this.savedDocs.find(d => d.id === id);
+            if (doc) {
+                this.viewDoc = JSON.parse(JSON.stringify(doc));
+                this.showDocViewer = true;
+            }
+        },
+
+        reviseDoc(id) {
+            const doc = this.savedDocs.find(d => d.id === id);
+            if (doc) {
+                // Load doc as base
+                this.doc = JSON.parse(JSON.stringify(doc));
+
+                // Add revision logic
+                const originalNo = this.doc.number;
+                // Check if already a revision
+                const revMatch = originalNo.match(/-Rev(\d+)$/);
+                let newRev = 1;
+                let baseNo = originalNo;
+
+                if (revMatch) {
+                    newRev = parseInt(revMatch[1]) + 1;
+                    baseNo = originalNo.replace(/-Rev\d+$/, '');
+                }
+
+                this.doc.number = `${baseNo}-Rev${newRev}`;
+                this.doc.date = new Date().toISOString().split('T')[0]; // Reset date to today
+                delete this.doc.id; // Ensure new ID on save
+
+                this.showDashboard = false;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        },
+
+        getFilteredDocs(type) {
+            const docs = this.dashboardStats.docsByType[type] || [];
+            if (!this.ledgerControls.search && !this.ledgerControls.startDate && !this.ledgerControls.endDate) {
+                return docs;
+            }
+
+            return docs.filter(doc => {
+                // Search Filter
+                const searchLower = this.ledgerControls.search.toLowerCase();
+                const matchesSearch = !this.ledgerControls.search ||
+                    doc.number.toLowerCase().includes(searchLower) ||
+                    doc.customer.toLowerCase().includes(searchLower) ||
+                    doc.total.toString().includes(searchLower);
+
+                // Date Range Filter
+                let matchesDate = true;
+                if (this.ledgerControls.startDate) {
+                    matchesDate = matchesDate && new Date(doc.date) >= new Date(this.ledgerControls.startDate);
+                }
+                if (this.ledgerControls.endDate) {
+                    matchesDate = matchesDate && new Date(doc.date) <= new Date(this.ledgerControls.endDate);
+                }
+
+                return matchesSearch && matchesDate;
+            });
+        },
+
+        exportLedgerTab(type) {
+            const data = this.getFilteredDocs(type).map(doc => ({
+                'Date': doc.date,
+                'Document No': doc.number,
+                'Customer': doc.customer,
+                'Status': doc.status,
+                'Amount': doc.total
+            }));
+
+            if (data.length === 0) {
+                alert('No data to export!');
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+            XLSX.writeFile(wb, `${type}_Ledger_Export.xlsx`);
         },
 
         getGstr1Details() {
