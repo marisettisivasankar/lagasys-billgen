@@ -2487,16 +2487,32 @@
                                                 <span class="font-bold text-slate-700"
                                                     x-text="formatCurrency(viewDoc.totals?.subtotal || 0)"></span>
                                             </div>
-                                            <div class="flex justify-between text-sm">
-                                                <span class="font-bold text-slate-400">CGST (9%)</span>
-                                                <span class="font-bold text-slate-700"
-                                                    x-text="formatCurrency(viewDoc.totals?.cgst || 0)"></span>
-                                            </div>
-                                            <div class="flex justify-between text-sm">
-                                                <span class="font-bold text-slate-400">SGST (9%)</span>
-                                                <span class="font-bold text-slate-700"
-                                                    x-text="formatCurrency(viewDoc.totals?.sgst || 0)"></span>
-                                            </div>
+
+                                            <!-- CGST/SGST -->
+                                            <template x-if="viewDoc.totals?.cgst > 0">
+                                                <div>
+                                                    <div class="flex justify-between text-sm">
+                                                        <span class="font-bold text-slate-400">CGST (9%)</span>
+                                                        <span class="font-bold text-slate-700"
+                                                            x-text="formatCurrency(viewDoc.totals?.cgst || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between text-sm mt-3">
+                                                        <span class="font-bold text-slate-400">SGST (9%)</span>
+                                                        <span class="font-bold text-slate-700"
+                                                            x-text="formatCurrency(viewDoc.totals?.sgst || 0)"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <!-- IGST -->
+                                            <template x-if="viewDoc.totals?.igst > 0">
+                                                <div class="flex justify-between text-sm">
+                                                    <span class="font-bold text-slate-400">IGST (18%)</span>
+                                                    <span class="font-bold text-slate-700"
+                                                        x-text="formatCurrency(viewDoc.totals?.igst || 0)"></span>
+                                                </div>
+                                            </template>
+
                                             <div
                                                 class="pt-3 border-t-2 border-slate-100 flex justify-between items-center">
                                                 <span class="font-black text-slate-900">Total</span>

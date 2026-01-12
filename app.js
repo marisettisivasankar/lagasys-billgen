@@ -1225,6 +1225,22 @@ function billApp() {
             const doc = this.savedDocs.find(d => d.id === id);
             if (doc) {
                 this.viewDoc = JSON.parse(JSON.stringify(doc));
+
+                // Calculate Tax Breakdown
+                const state = (this.viewDoc.customer.state || '').toLowerCase();
+                const isInterstate = !state.includes('telangana');
+                const totalTax = this.viewDoc.totals?.tax || 0;
+
+                if (isInterstate) {
+                    this.viewDoc.totals.igst = totalTax;
+                    this.viewDoc.totals.cgst = 0;
+                    this.viewDoc.totals.sgst = 0;
+                } else {
+                    this.viewDoc.totals.igst = 0;
+                    this.viewDoc.totals.cgst = totalTax / 2;
+                    this.viewDoc.totals.sgst = totalTax / 2;
+                }
+
                 this.showDocViewer = true;
             }
         },
