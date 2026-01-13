@@ -117,18 +117,62 @@
 
                 <div class="h-6 w-px bg-slate-200 ml-3"></div>
 
-                <button @click="showHistory = true"
-                    class="ml-3 text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center">
-                    <i data-lucide="history" class="w-4 h-4 mr-1"></i>
-                    History
-                </button>
+                <!-- Options Dropdown -->
+                <div class="relative ml-3" x-data="{ open: false }">
+                    <button @click="open = !open" @click.away="open = false"
+                        class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center group">
+                        <i data-lucide="layers" class="w-4 h-4 mr-1"></i>
+                        <span>Options</span>
+                        <i data-lucide="chevron-down"
+                            class="w-3 h-3 ml-1 text-slate-400 group-hover:text-blue-600 transition-colors"
+                            :class="{'rotate-180': open}"></i>
+                    </button>
 
-                <button @click="showSettings = true" title="Settings" x-show="isAdmin()"
-                    class="text-slate-600 hover:text-slate-800 font-medium text-sm transition-colors flex items-center ml-3">
-                    <i data-lucide="settings" class="w-4 h-4 mr-1"></i>
-                    Settings
-                </button>
-                <div class="h-6 w-px bg-slate-200" x-show="isAdmin()"></div>
+                    <div x-show="open" x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 translate-y-2"
+                        class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
+
+                        <div
+                            class="px-3 py-2 text-xs font-black uppercase text-slate-400 tracking-widest border-b border-slate-50 mb-1">
+                            General
+                        </div>
+
+                        <button @click="openCustomerManager(); open = false"
+                            class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
+                            <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
+                            <span>Customers</span>
+                        </button>
+
+                        <button @click="openProductManager(); open = false"
+                            class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
+                            <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
+                            <span>Products</span>
+                        </button>
+
+
+
+
+
+
+                        <button @click="showHistory = true; open = false"
+                            class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
+                            <i data-lucide="history" class="w-4 h-4 text-slate-400"></i>
+                            <span>History</span>
+                        </button>
+
+                        <button x-show="isAdmin()" @click="showSettings = true; open = false"
+                            class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
+                            <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i>
+                            <span>Settings</span>
+                        </button>
+
+
+                    </div>
+                </div>
                 <button @click="showGstDashboard = true" x-show="isAdmin() || isAccountant()"
                     class="text-slate-600 hover:text-blue-600 font-medium text-sm transition-colors flex items-center ml-3">
                     <i data-lucide="shield-check" class="w-4 h-4 mr-1"></i>
@@ -142,13 +186,7 @@
                     Save Draft
                 </button>
 
-                <!-- Email Button -->
-                <button @click="openEmailClient()"
-                    class="text-slate-600 hover:text-indigo-600 font-medium text-sm transition-colors flex items-center"
-                    title="Draft Email">
-                    <i data-lucide="mail" class="w-4 h-4 mr-1"></i>
-                    Email
-                </button>
+
 
                 <button @click="savePDF()" :disabled="isSaving"
                     class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg transition-all font-bold shadow-lg shadow-blue-200 min-w-[160px] justify-center">
@@ -431,7 +469,9 @@
                                                 <th class="px-8 py-4">Date</th>
                                                 <th class="px-8 py-4">Customer</th>
                                                 <th class="px-8 py-4 text-right">Grand Total</th>
-                                                <th class="px-8 py-4 text-center">Status</th>
+                                                <th class="px-8 py-4 text-center"
+                                                    x-show="['Tax Invoice', 'Proforma Invoice'].includes(type)">Payment
+                                                </th>
                                                 <th class="px-8 py-4 text-center">Actions</th>
                                             </tr>
                                         </thead>
@@ -446,14 +486,22 @@
                                                         x-text="doc.customer"></td>
                                                     <td class="px-8 py-4 text-right font-black text-slate-900"
                                                         x-text="formatCurrency(doc.total)"></td>
-                                                    <td class="px-8 py-4 text-center">
-                                                        <span :class="{
-                                                            'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest': true,
-                                                            'bg-green-100 text-green-700': doc.status === 'PAID',
-                                                            'bg-amber-100 text-amber-700': doc.status === 'UNPAID',
-                                                            'bg-red-100 text-red-700': doc.status === 'OVERDUE' || doc.status === 'EXPIRED',
-                                                            'bg-blue-100 text-blue-700': doc.status === 'CONVERTED'
-                                                        }" x-text="doc.status || 'UNPAID'"></span>
+                                                    <td class="px-8 py-4 text-center"
+                                                        x-show="['Tax Invoice', 'Proforma Invoice'].includes(type)">
+                                                        <!-- Payment Toggle for Invoices -->
+                                                        <template
+                                                            x-if="['Tax Invoice', 'Proforma Invoice'].includes(doc.raw.type)">
+                                                            <button @click.stop="toggleDocStatus(doc.raw)"
+                                                                class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border"
+                                                                :class="doc.status === 'PAID' ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200'"
+                                                                x-text="doc.status === 'PAID' ? 'PAID' : 'UNPAID'">
+                                                            </button>
+                                                        </template>
+                                                        <!-- Empty for other document types -->
+                                                        <template
+                                                            x-if="!['Tax Invoice', 'Proforma Invoice'].includes(doc.raw.type)">
+                                                            <span class="text-slate-300">—</span>
+                                                        </template>
                                                     </td>
                                                     <td
                                                         class="px-8 py-4 text-center flex items-center justify-center space-x-2">
@@ -475,7 +523,7 @@
                                             </template>
                                             <template x-if="getFilteredDocs(type).length === 0">
                                                 <tr>
-                                                    <td colspan="6"
+                                                    <td :colspan="['Tax Invoice', 'Proforma Invoice'].includes(type) ? 6 : 5"
                                                         class="px-8 py-20 text-center text-slate-400 italic">
                                                         <span
                                                             x-show="!ledgerControls.search && !ledgerControls.startDate">No
@@ -828,109 +876,248 @@
                             </div>
                         </div>
 
+                        <!-- Dynamic Return Type Cards -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <!-- GSTR-1 Card -->
-                            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-                                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                                    <h3 class="font-black">GSTR-1 (Sales Return)</h3>
-                                    <span
-                                        class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 font-bold uppercase">Critical</span>
-                                </div>
-                                <div class="p-6 space-y-4">
-                                    <div
-                                        class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <div class="flex items-center space-x-3">
-                                            <div class="bg-white p-2 rounded-xl shadow-sm"><i data-lucide="file-text"
-                                                    class="w-5 h-5 text-slate-600"></i></div>
-                                            <div>
-                                                <p class="text-xs font-bold text-slate-500 uppercase">Current Month</p>
-                                                <p class="font-bold text-slate-900">January 2026</p>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-[10px] font-bold text-red-500 uppercase">Due Date</p>
-                                            <p class="font-bold text-slate-900"
-                                                x-text="calculateGstDueDate('GSTR-1', 'Feb', 2026, gstSettings.filingFrequency) + ' Feb 2026'">
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <p class="text-sm text-slate-600 leading-relaxed">
-                                        Includes details of all B2B and B2C outward supplies. This forms the basis for
-                                        your liability and your recipient's credit.
-                                    </p>
-                                    <button @click="showGstr1Details = !showGstr1Details"
-                                        class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="eye" class="w-4 h-4"></i>
-                                        <span
-                                            x-text="showGstr1Details ? 'Hide Invoice Details' : 'View Invoice Details'"></span>
-                                    </button>
-                                    <button @click="generateGstr1Json()"
-                                        class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="download" class="w-4 h-4"></i>
-                                        <span>Download GSTR-1 Portal JSON</span>
-                                    </button>
-                                    <button @click="exportGstr1Excel()"
-                                        class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-                                        <span>Download GSTR-1 Excel</span>
-                                    </button>
-                                    <button @click="saveGstReturn('GSTR-1', 'DRAFT')"
-                                        class="w-full py-2 text-xs font-bold text-slate-500 hover:text-blue-600 transition-all">
-                                        Save Draft Record
-                                    </button>
-                                </div>
-                            </div>
+                            <template x-for="returnType in getApplicableReturns()" :key="returnType.code">
+                                <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden"
+                                    x-data="{
+                                        selectedPeriod: '',
+                                        selectedYear: new Date().getFullYear(),
+                                        calculatedData: null,
+                                        isCalculating: false
+                                    }"
+                                    x-init="selectedPeriod = getGstPeriods(selectedYear, gstSettings.filingFrequency)[0]?.value">
 
-                            <!-- GSTR-3B Card -->
-                            <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-                                <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                                    <h3 class="font-black">GSTR-3B (Summary Return)</h3>
-                                    <span
-                                        class="text-[10px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 font-bold uppercase">Tax
-                                        Payment</span>
-                                </div>
-                                <div class="p-6 space-y-4">
-                                    <div
-                                        class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <div class="flex items-center space-x-3">
-                                            <div class="bg-white p-2 rounded-xl shadow-sm"><i data-lucide="credit-card"
-                                                    class="w-5 h-5 text-slate-600"></i></div>
-                                            <div>
-                                                <p class="text-xs font-bold text-slate-500 uppercase">Current Month</p>
-                                                <p class="font-bold text-slate-900">January 2026</p>
+                                    <!-- Card Header -->
+                                    <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                                        <div>
+                                            <h3 class="font-black" x-text="returnType.name"></h3>
+                                            <p class="text-xs text-slate-400 mt-1" x-text="returnType.description"></p>
+                                        </div>
+                                        <span :class="{
+                                            'text-[10px] px-2 py-0.5 rounded border font-bold uppercase': true,
+                                            'bg-blue-500/20 text-blue-400 border-blue-500/30': returnType.code === 'GSTR-1',
+                                            'bg-amber-500/20 text-amber-500 border-amber-500/30': returnType.code === 'GSTR-3B',
+                                            'bg-green-500/20 text-green-500 border-green-500/30': returnType.code === 'CMP-08',
+                                            'bg-purple-500/20 text-purple-500 border-purple-500/30': returnType.code === 'GSTR-9'
+                                        }" x-text="returnType.frequencies.join('/')"></span>
+                                    </div>
+
+                                    <div class="p-6 space-y-4">
+                                        <!-- Period Selector -->
+                                        <div class="space-y-2">
+                                            <label class="text-xs font-bold text-slate-500 uppercase">Select
+                                                Period</label>
+                                            <div class="flex space-x-2">
+                                                <select x-model="selectedPeriod"
+                                                    class="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10">
+                                                    <template
+                                                        x-for="period in getGstPeriods(selectedYear, gstSettings.filingFrequency)"
+                                                        :key="period.value">
+                                                        <option :value="period.value" x-text="period.label"></option>
+                                                    </template>
+                                                </select>
+                                                <select x-model="selectedYear"
+                                                    class="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10">
+                                                    <option :value="new Date().getFullYear() - 1"
+                                                        x-text="new Date().getFullYear() - 1"></option>
+                                                    <option :value="new Date().getFullYear()"
+                                                        x-text="new Date().getFullYear()"></option>
+                                                    <option :value="new Date().getFullYear() + 1"
+                                                        x-text="new Date().getFullYear() + 1"></option>
+                                                </select>
                                             </div>
                                         </div>
-                                        <div class="text-right">
-                                            <p class="text-[10px] font-bold text-red-500 uppercase">Due Date</p>
-                                            <p class="font-bold text-slate-900">20th Feb 2026</p>
+
+                                        <!-- Due Date & Status -->
+                                        <div
+                                            class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="bg-white p-2 rounded-xl shadow-sm">
+                                                    <i data-lucide="calendar" class="w-5 h-5 text-slate-600"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="text-xs font-bold text-slate-500 uppercase">Due Date</p>
+                                                    <p class="font-bold text-slate-900"
+                                                        x-text="calculateGstDueDate(returnType.code, selectedPeriod, gstSettings.filingFrequency)?.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'}) || 'N/A'">
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span :class="{
+                                                'px-3 py-1 rounded-full text-[10px] font-black uppercase': true,
+                                                'bg-green-100 text-green-700': getFilingStatus(returnType.code, selectedPeriod) === 'Filed',
+                                                'bg-amber-100 text-amber-700': getFilingStatus(returnType.code, selectedPeriod) === 'Pending',
+                                                'bg-red-100 text-red-700': getFilingStatus(returnType.code, selectedPeriod) === 'Overdue'
+                                            }" x-text="getFilingStatus(returnType.code, selectedPeriod)"></span>
+                                        </div>
+
+                                        <!-- Calculate Button -->
+                                        <button @click="async () => {
+                                            isCalculating = true;
+                                            try {
+                                                const [year, month] = selectedPeriod.includes('Q') ? 
+                                                    [selectedPeriod.split('-')[1], selectedPeriod.split('-')[0]] : 
+                                                    selectedPeriod.split('-');
+                                                
+                                                if (returnType.code === 'GSTR-1') {
+                                                    const startDate = `${year}-${month.padStart(2, '0')}-01`;
+                                                    const endDate = `${year}-${month.padStart(2, '0')}-31`;
+                                                    calculatedData = await calculateGSTR1(startDate, endDate);
+                                                } else if (returnType.code === 'GSTR-3B') {
+                                                    const startDate = `${year}-${month.padStart(2, '0')}-01`;
+                                                    const endDate = `${year}-${month.padStart(2, '0')}-31`;
+                                                    calculatedData = await calculateGSTR3B(startDate, endDate);
+                                                } else if (returnType.code === 'CMP-08') {
+                                                    calculatedData = await calculateCMP08(selectedPeriod, year);
+                                                } else if (returnType.code === 'GSTR-9') {
+                                                    calculatedData = await calculateGSTR9(selectedPeriod);
+                                                }
+                                            } catch(e) {
+                                                console.error('Calculation error:', e);
+                                                alert('Error calculating return: ' + e.message);
+                                            } finally {
+                                                isCalculating = false;
+                                            }
+                                        }" :disabled="isCalculating"
+                                            class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <i data-lucide="calculator" class="w-4 h-4"></i>
+                                            <span
+                                                x-text="isCalculating ? 'Calculating...' : 'Calculate from Invoices'"></span>
+                                        </button>
+
+                                        <!-- Calculated Data Display -->
+                                        <div x-show="calculatedData" x-transition
+                                            class="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                            <template x-if="returnType.code === 'GSTR-1'">
+                                                <div class="space-y-2 text-sm">
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Total Invoices:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="calculatedData?.invoiceCount || 0"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">B2B Count:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="calculatedData?.b2b?.length || 0"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">B2C Count:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="calculatedData?.b2c?.length || 0"></span>
+                                                    </div>
+                                                    <div class="flex justify-between pt-2 border-t border-blue-200">
+                                                        <span class="font-bold text-slate-600">Total Taxable:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.totalTaxable || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Total GST:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.totalGst || 0)"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="returnType.code === 'GSTR-3B'">
+                                                <div class="space-y-2 text-sm">
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Taxable Value:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.outwardSupplies?.taxableValue || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">CGST:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="formatCurrency(calculatedData?.outwardSupplies?.cgst || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">SGST:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="formatCurrency(calculatedData?.outwardSupplies?.sgst || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between pt-2 border-t border-blue-200">
+                                                        <span class="font-bold text-slate-600">Net Tax Liability:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.netTaxLiability || 0)"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="returnType.code === 'CMP-08'">
+                                                <div class="space-y-2 text-sm">
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Turnover:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.turnover || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Tax Rate:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="(calculatedData?.taxRate || 0) + '%'"></span>
+                                                    </div>
+                                                    <div class="flex justify-between pt-2 border-t border-blue-200">
+                                                        <span class="font-bold text-slate-600">Tax Payable:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.taxPayable || 0)"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="returnType.code === 'GSTR-9'">
+                                                <div class="space-y-2 text-sm">
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Annual Turnover:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.annualTurnover || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Annual GST:</span>
+                                                        <span class="font-black text-blue-600"
+                                                            x-text="formatCurrency(calculatedData?.annualGst || 0)"></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="font-bold text-slate-600">Total Invoices:</span>
+                                                        <span class="font-black text-slate-900"
+                                                            x-text="calculatedData?.invoiceCount || 0"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <!-- Download Buttons -->
+                                        <div x-show="calculatedData" x-transition class="grid grid-cols-2 gap-2">
+                                            <button
+                                                @click="downloadGstReturnExcel(returnType.code, selectedPeriod, calculatedData)"
+                                                class="py-3 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
+                                                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                                                <span>Excel</span>
+                                            </button>
+                                            <button
+                                                @click="downloadGstReturnJSON(returnType.code, selectedPeriod, calculatedData)"
+                                                class="py-3 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2">
+                                                <i data-lucide="download" class="w-4 h-4"></i>
+                                                <span>JSON</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Mark as Filed Button -->
+                                        <button @click="async () => {
+                                            if (confirm('Mark this return as filed?')) {
+                                                await saveGstFiling(returnType.code, selectedPeriod, calculatedData, 'Filed');
+                                            }
+                                        }" x-show="getFilingStatus(returnType.code, selectedPeriod) !== 'Filed'"
+                                            class="w-full py-3 bg-green-600 text-white rounded-2xl font-black hover:bg-green-700 transition-all flex items-center justify-center space-x-2">
+                                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                            <span>Mark as Filed</span>
+                                        </button>
+
+                                        <!-- Filed Badge -->
+                                        <div x-show="getFilingStatus(returnType.code, selectedPeriod) === 'Filed'"
+                                            class="p-4 bg-green-50 rounded-xl border border-green-200 text-center">
+                                            <i data-lucide="check-circle-2"
+                                                class="w-6 h-6 text-green-600 mx-auto mb-2"></i>
+                                            <p class="text-sm font-black text-green-700">Filed Successfully</p>
                                         </div>
                                     </div>
-                                    <p class="text-sm text-slate-600 leading-relaxed">
-                                        Summary of inward and outward supplies along with the input tax credit (ITC).
-                                        Final tax payment is calculated here.
-                                    </p>
-                                    <button @click="showGstr3bPortal = !showGstr3bPortal"
-                                        class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="eye" class="w-4 h-4"></i>
-                                        <span
-                                            x-text="showGstr3bPortal ? 'Hide Portal View' : 'View GSTR-3B Portal View'"></span>
-                                    </button>
-                                    <button @click="generateGstr3bJson()"
-                                        class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="download" class="w-4 h-4"></i>
-                                        <span>Download GSTR-3B Summary JSON</span>
-                                    </button>
-                                    <button @click="exportGstr3bExcel()"
-                                        class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
-                                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-                                        <span>Download GSTR-3B Excel</span>
-                                    </button>
-                                    <button @click="saveGstReturn('GSTR-3B', 'DRAFT')"
-                                        class="w-full py-2 text-xs font-bold text-slate-500 hover:text-blue-600 transition-all">
-                                        Save Draft Record
-                                    </button>
                                 </div>
-                            </div>
+                            </template>
                         </div>
 
                         <!-- Detailed Table (Conditional) -->
@@ -2537,6 +2724,247 @@
                 <div class="p-6 bg-slate-50 border-t border-slate-200 flex justify-end space-x-4">
                     <button @click="showDocViewer = false"
                         class="px-6 py-3 font-bold text-slate-500 hover:text-slate-800 transition-colors">Close</button>
+                </div>
+            </div>
+        </div>
+        <!-- Customer Management Modal -->
+        <div x-show="showCustomerManager" style="display: none;"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-all"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+
+            <div class="w-full max-w-4xl h-[80vh] bg-white rounded-3xl shadow-2xl flex flex-col transform transition-transform overflow-hidden"
+                @click.away="showCustomerManager = false" x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="scale-95" x-transition:enter-end="scale-100"
+                x-transition:leave="transition ease-in duration-200" x-transition:leave-start="scale-100"
+                x-transition:leave-end="scale-95">
+
+                <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                        <i data-lucide="users" class="w-6 h-6 mr-3 text-blue-600"></i>
+                        Customer Management
+                    </h2>
+                    <button @click="showCustomerManager = false" class="text-slate-400 hover:text-slate-600">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <div class="flex-1 flex overflow-hidden">
+                    <!-- Customer List Sidebar -->
+                    <div class="w-1/3 border-r border-slate-100 bg-slate-50/50 flex flex-col">
+                        <div class="p-4 border-b border-slate-100 space-y-3">
+                            <button @click="resetCustomerForm()"
+                                class="w-full py-2 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center">
+                                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                                Add New Customer
+                            </button>
+                            <div class="relative">
+                                <i data-lucide="search"
+                                    class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" x-model="customerSearch" placeholder="Search customers..."
+                                    class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all">
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                            <template
+                                x-for="c in masterData.customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.gstin && c.gstin.toLowerCase().includes(customerSearch.toLowerCase())))"
+                                :key="c.id || c.name">
+                                <div @click="editCustomer(c)"
+                                    class="p-3 rounded-xl cursor-pointer transition-all border group flex items-center justify-between"
+                                    :class="custForm.id === c.id ? 'bg-white border-blue-500 shadow-md' : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200 hover:shadow-sm'">
+                                    <div class="flex-1 min-w-0 mr-2">
+                                        <div class="font-bold text-slate-800 text-sm truncate" x-text="c.name"></div>
+                                        <div class="text-[10px] text-slate-500 truncate" x-text="c.gstin || 'No GSTIN'">
+                                        </div>
+                                    </div>
+                                    <div class="text-slate-300 group-hover:text-blue-500 transition-colors">
+                                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                                    </div>
+                                </div>
+                            </template>
+                            <template
+                                x-if="masterData.customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.gstin && c.gstin.toLowerCase().includes(customerSearch.toLowerCase()))).length === 0">
+                                <div class="text-center py-10 text-slate-400 text-sm">No customers found.</div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Edit Form -->
+                    <div class="flex-1 overflow-y-auto p-8 bg-white">
+                        <h3 class="font-black text-lg text-slate-800 mb-6"
+                            x-text="custForm.id ? 'Edit Customer' : 'New Customer'"></h3>
+
+                        <div class="grid grid-cols-1 gap-6 max-w-lg">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Business Name
+                                    <span class="text-red-500">*</span></label>
+                                <input type="text" x-model="custForm.name"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Billing
+                                    Address</label>
+                                <textarea rows="3" x-model="custForm.address"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label
+                                        class="text-xs font-bold text-slate-500 uppercase tracking-wide">GSTIN</label>
+                                    <input type="text" x-model="custForm.gstin"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">PAN</label>
+                                    <input type="text" x-model="custForm.pan"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">State</label>
+                                <input type="text" x-model="custForm.state"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                            </div>
+
+                            <div class="pt-4 flex items-center space-x-4">
+                                <button @click="saveCustomerForm()"
+                                    class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all flex items-center">
+                                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                                    Save Customer
+                                </button>
+
+                                <button x-show="custForm.id" @click="deleteCustomer(custForm.id)"
+                                    class="px-6 py-2 bg-white text-red-500 border border-red-100 rounded-xl font-bold hover:bg-red-50 transition-all flex items-center">
+                                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Product Management Modal -->
+        <div x-show="showProductManager" style="display: none;"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-all"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+
+            <div class="w-full max-w-4xl h-[80vh] bg-white rounded-3xl shadow-2xl flex flex-col transform transition-transform overflow-hidden"
+                @click.away="showProductManager = false" x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="scale-95" x-transition:enter-end="scale-100"
+                x-transition:leave="transition ease-in duration-200" x-transition:leave-start="scale-100"
+                x-transition:leave-end="scale-95">
+
+                <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                        <i data-lucide="package" class="w-6 h-6 mr-3 text-blue-600"></i>
+                        Product Management
+                    </h2>
+                    <button @click="showProductManager = false" class="text-slate-400 hover:text-slate-600">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <div class="flex-1 flex overflow-hidden">
+                    <!-- Product List Sidebar -->
+                    <div class="w-1/3 border-r border-slate-100 bg-slate-50/50 flex flex-col">
+                        <div class="p-4 border-b border-slate-100 space-y-3">
+                            <button @click="resetProductForm()"
+                                class="w-full py-2 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center">
+                                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                                Add New Product
+                            </button>
+                            <div class="relative">
+                                <i data-lucide="search"
+                                    class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" x-model="productSearch" placeholder="Search products..."
+                                    class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all">
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+                            <template
+                                x-for="p in masterData.products.filter(p => p.desc.toLowerCase().includes(productSearch.toLowerCase()))"
+                                :key="p.id || p.desc">
+                                <div @click="editProduct(p)"
+                                    class="p-3 rounded-xl cursor-pointer transition-all border group flex items-center justify-between"
+                                    :class="prodForm.id === p.id ? 'bg-white border-blue-500 shadow-md' : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200 hover:shadow-sm'">
+                                    <div class="flex-1 min-w-0 mr-2">
+                                        <div class="font-bold text-slate-800 text-sm truncate" x-text="p.desc"></div>
+                                        <div class="text-[10px] text-slate-500 truncate"
+                                            x-text="'₹' + p.rate + ' | ' + p.taxRate + '% GST'"></div>
+                                    </div>
+                                    <div class="text-slate-300 group-hover:text-blue-500 transition-colors">
+                                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                                    </div>
+                                </div>
+                            </template>
+                            <template
+                                x-if="masterData.products.filter(p => p.desc.toLowerCase().includes(productSearch.toLowerCase())).length === 0">
+                                <div class="text-center py-10 text-slate-400 text-sm">No products found.</div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Edit Form -->
+                    <div class="flex-1 overflow-y-auto p-8 bg-white">
+                        <h3 class="font-black text-lg text-slate-800 mb-6"
+                            x-text="prodForm.id ? 'Edit Product' : 'New Product'"></h3>
+
+                        <div class="grid grid-cols-1 gap-6 max-w-lg">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Description
+                                    <span class="text-red-500">*</span></label>
+                                <textarea rows="3" x-model="prodForm.desc"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">HSN/SAC
+                                        Code</label>
+                                    <input type="text" x-model="prodForm.hsn"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Unit Price
+                                        (₹)</label>
+                                    <input type="number" x-model="prodForm.rate"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">GST Rate
+                                    (%)</label>
+                                <select x-model="prodForm.taxRate"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    <template x-for="slab in allowedTaxSlabs" :key="slab">
+                                        <option :value="slab" x-text="slab + '%'"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="pt-4 flex items-center space-x-4">
+                                <button @click="saveProductForm()"
+                                    class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all flex items-center">
+                                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                                    Save Product
+                                </button>
+
+                                <button x-show="prodForm.id" @click="deleteProduct(prodForm.id)"
+                                    class="px-6 py-2 bg-white text-red-500 border border-red-100 rounded-xl font-bold hover:bg-red-50 transition-all flex items-center">
+                                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

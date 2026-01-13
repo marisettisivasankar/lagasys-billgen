@@ -32,9 +32,29 @@ function billApp() {
         showGstr1Details: false,
         showGstr3bPortal: false,
         selectedGstReturn: null,
-        showGstHistoryDetail: false,
-        showDocViewer: false,
         viewDoc: null,
+        showCustomerManager: false,
+        customerSearch: '',
+        viewDoc: null,
+        showCustomerManager: false,
+        customerSearch: '',
+        showProductManager: false,
+        productSearch: '',
+        prodForm: {
+            id: null,
+            desc: '',
+            hsn: '',
+            rate: 0,
+            taxRate: 18
+        },
+        custForm: {
+            id: null,
+            name: '',
+            address: '',
+            gstin: '',
+            state: '',
+            pan: ''
+        },
         gstSettings: {
             taxpayerType: 'Regular', // 'Regular', 'Composition', 'TDS/TCS'
             filingFrequency: 'Monthly', // 'Monthly', 'Quarterly'
@@ -43,6 +63,43 @@ function billApp() {
             state: 'Telangana',
             stateCode: '36'
         },
+        gstReturnTypes: [
+            {
+                code: 'GSTR-1',
+                name: 'GSTR-1',
+                description: 'Details of outward supplies (Sales)',
+                applicableTo: ['Regular'],
+                frequencies: ['Monthly', 'Quarterly'],
+                dueDayMonthly: 11,
+                dueDayQuarterly: 13
+            },
+            {
+                code: 'GSTR-3B',
+                name: 'GSTR-3B',
+                description: 'Summary return & tax payment',
+                applicableTo: ['Regular'],
+                frequencies: ['Monthly', 'Quarterly'],
+                dueDayMonthly: 20,
+                dueDayQuarterly: { Q1: 22, Q2: 22, Q3: 24, Q4: 24 }
+            },
+            {
+                code: 'CMP-08',
+                name: 'CMP-08',
+                description: 'Self-assessed tax for Composition dealers',
+                applicableTo: ['Composition'],
+                frequencies: ['Quarterly'],
+                dueDayQuarterly: 18
+            },
+            {
+                code: 'GSTR-9',
+                name: 'GSTR-9',
+                description: 'Annual return for regular taxpayers',
+                applicableTo: ['Regular'],
+                frequencies: ['Annual'],
+                dueDateAnnual: { month: 12, day: 31 } // 31st December of following FY
+            }
+        ],
+        gstFilings: [], // Will store filing records from Supabase
 
         // Auth State
         user: null,
@@ -185,6 +242,7 @@ function billApp() {
             await this.loadCurrentDoc();
             await this.loadHistory();
             await this.loadGstReturns();
+            await this.loadGstFilings();
 
             if (!this.doc.number) {
                 this.doc.number = this.getPreviewNumber(this.doc.type);
@@ -504,11 +562,142 @@ function billApp() {
                 .order('desc');
             if (data) {
                 this.masterData.products = data.map(p => ({
+                    id: p.id,
                     desc: p.desc,
                     hsn: p.hsn,
                     rate: p.rate,
                     taxRate: p.tax_rate
                 }));
+            }
+        },
+
+        // --- Product Master Management ---
+        openProductManager() {
+            this.showProductManager = true;
+            this.resetProductForm();
+        },
+
+        resetProductForm() {
+            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
+        },
+
+        editProduct(product) {
+            this.prodForm = { ...product };
+        },
+
+        async saveProductForm() {
+            if (!this.prodForm.desc) {
+                alert('Product Description is required');
+                return;
+            }
+
+            const payload = {
+                desc: this.prodForm.desc,
+                hsn: this.prodForm.hsn,
+                rate: this.prodForm.rate,
+                tax_rate: this.prodForm.taxRate
+            };
+
+            if (this.prodForm.id) {
+                payload.id = this.prodForm.id;
+            }
+
+            let query = window.supabase.from('products');
+            const { error } = await query.upsert(payload);
+
+            if (error) {
+                console.error('Save Product Error:', error);
+                alert('Failed to save product: ' + error.message);
+                return;
+            }
+
+            alert('Product saved successfully!');
+            this.resetProductForm();
+            await this.loadProducts();
+        },
+
+        async deleteProduct(id) {
+            if (!confirm('Are you sure you want to delete this product?')) return;
+
+            const { error } = await window.supabase
+                .from('products')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert('Failed to delete: ' + error.message);
+            } else {
+                await this.loadProducts();
+            }
+        },
+
+        // --- Customer Master Management ---
+        openCustomerManager() {
+            this.showCustomerManager = true;
+            this.resetCustomerForm();
+        },
+
+        resetCustomerForm() {
+            this.custForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+        },
+
+        editCustomer(customer) {
+            this.custForm = { ...customer };
+        },
+
+        async saveCustomerForm() {
+            if (!this.custForm.name) {
+                alert('Customer Name is required');
+                return;
+            }
+
+            const payload = {
+                name: this.custForm.name,
+                address: this.custForm.address,
+                gstin: this.custForm.gstin,
+                state: this.custForm.state,
+                pan: this.custForm.pan
+            };
+
+            if (this.custForm.id) {
+                payload.id = this.custForm.id;
+            }
+
+            // Using upsert based on ID if present, else name might cause conflict if unique, 
+            // but assuming ID is the safe bet for updates.
+            // If ID is null, we want insert. If name conflict, we might want update or error.
+            // For now, let's rely on upsert. If we have UUIDs, upsert works well.
+            // If table uses serial ID, we shouldn't send ID on insert.
+
+            let query = window.supabase.from('customers');
+
+            // If we have an ID, we are likely updating precise record. 
+            // If not, we are inserting.
+            const { error } = await query.upsert(payload);
+
+            if (error) {
+                console.error('Save Customer Error:', error);
+                alert('Failed to save customer: ' + error.message);
+                return;
+            }
+
+            alert('Customer saved successfully!');
+            this.resetCustomerForm();
+            await this.loadCustomers(); // Reload list
+        },
+
+        async deleteCustomer(id) {
+            if (!confirm('Are you sure you want to delete this customer?')) return;
+
+            const { error } = await window.supabase
+                .from('customers')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert('Failed to delete: ' + error.message);
+            } else {
+                await this.loadCustomers();
             }
         },
 
@@ -617,6 +806,28 @@ function billApp() {
                 .order('created_at', { ascending: false });
             if (!error) {
                 this.savedDocs = data;
+                this.updateExecutiveStats();
+            }
+        },
+
+        async toggleDocStatus(doc) {
+            const newStatus = doc.status === 'PAID' ? 'UNPAID' : 'PAID';
+
+            // Optimistic update
+            doc.status = newStatus;
+
+            const { error } = await window.supabase
+                .from('documents')
+                .update({ status: newStatus })
+                .eq('id', doc.id);
+
+            if (error) {
+                console.error('Error updating status:', error);
+                // Revert on error
+                doc.status = newStatus === 'PAID' ? 'UNPAID' : 'PAID';
+                alert('Failed to update status');
+            } else {
+                // Update stats if needed
                 this.updateExecutiveStats();
             }
         },
@@ -1017,18 +1228,43 @@ function billApp() {
             const customerName = this.doc.customer.name || 'Customer';
             const number = this.doc.number || 'Draft';
             const type = this.doc.type;
-            const subject = encodeURIComponent(`${type} #${number} from LaGa Systems Pvt Ltd`);
+            const subject = `${type} #${number} from LaGa Systems Pvt Ltd`;
             const total = this.grandTotal();
             const amountStr = this.formatCurrency(total);
-            const body = encodeURIComponent(
+            const body =
                 `Dear ${customerName},\n\n` +
                 `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
                 `Kindly review and process at your earliest convenience.\n\n` +
                 `Regards,\n` +
                 `LaGa Systems Pvt Ltd\n` +
-                `Hyderabad`
-            );
-            window.open(`mailto:?subject=${subject}&body=${body}`);
+                `Hyderabad`;
+
+            window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        },
+
+        async copyEmailDraft() {
+            const customerName = this.doc.customer.name || 'Customer';
+            const number = this.doc.number || 'Draft';
+            const type = this.doc.type;
+            const subject = `${type} #${number} from LaGa Systems Pvt Ltd`;
+            const total = this.grandTotal();
+            const amountStr = this.formatCurrency(total);
+            const body =
+                `Subject: ${subject}\n\n` +
+                `Dear ${customerName},\n\n` +
+                `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
+                `Kindly review and process at your earliest convenience.\n\n` +
+                `Regards,\n` +
+                `LaGa Systems Pvt Ltd\n` +
+                `Hyderabad`;
+
+            try {
+                await navigator.clipboard.writeText(body);
+                alert('Email draft copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            }
         },
 
         // Duplicate document feature
@@ -1691,6 +1927,343 @@ function billApp() {
         viewGstReturnDetail(rec) {
             this.selectedGstReturn = rec;
             this.showGstHistoryDetail = true;
+        },
+
+        // --- GST Compliance Helper Functions ---
+
+        getApplicableReturns() {
+            return this.gstReturnTypes.filter(rt =>
+                rt.applicableTo.includes(this.gstSettings.taxpayerType)
+            );
+        },
+
+        calculateGstDueDate(returnType, period, frequency) {
+            const rt = this.gstReturnTypes.find(r => r.code === returnType);
+            if (!rt) return null;
+
+            let dueDate;
+
+            if (frequency === 'Monthly') {
+                // Period format: '2026-01'
+                const [year, month] = period.split('-').map(Number);
+                const nextMonth = month === 12 ? 1 : month + 1;
+                const nextYear = month === 12 ? year + 1 : year;
+                dueDate = new Date(nextYear, nextMonth - 1, rt.dueDayMonthly);
+            } else if (frequency === 'Quarterly') {
+                // Period format: 'Q1-2026'
+                const [q, year] = period.split('-');
+                const quarter = q.replace('Q', '');
+                const quarterEndMonth = quarter * 3;
+                const nextMonth = quarterEndMonth === 12 ? 1 : quarterEndMonth + 1;
+                const nextYear = quarterEndMonth === 12 ? parseInt(year) + 1 : parseInt(year);
+
+                let dueDay = rt.dueDayQuarterly;
+                if (typeof dueDay === 'object') {
+                    dueDay = dueDay[q] || 13;
+                }
+
+                dueDate = new Date(nextYear, nextMonth - 1, dueDay);
+            } else if (frequency === 'Annual') {
+                // Period format: 'FY2025-26'
+                const fyYear = parseInt(period.split('-')[0].replace('FY', ''));
+                dueDate = new Date(fyYear + 1, rt.dueDateAnnual.month - 1, rt.dueDateAnnual.day);
+            }
+
+            return dueDate;
+        },
+
+        getGstPeriods(year, frequency) {
+            const periods = [];
+            if (frequency === 'Monthly') {
+                for (let m = 1; m <= 12; m++) {
+                    const month = m.toString().padStart(2, '0');
+                    periods.push({ value: `${year}-${month}`, label: `${this.getMonthName(m)} ${year}` });
+                }
+            } else if (frequency === 'Quarterly') {
+                for (let q = 1; q <= 4; q++) {
+                    periods.push({ value: `Q${q}-${year}`, label: `Q${q} ${year}` });
+                }
+            } else if (frequency === 'Annual') {
+                const fy = `FY${year}-${(year + 1).toString().slice(-2)}`;
+                periods.push({ value: fy, label: fy });
+            }
+            return periods;
+        },
+
+        getMonthName(month) {
+            const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return names[month - 1];
+        },
+
+        async calculateGSTR1(startDate, endDate) {
+            // Calculate GSTR-1 from Tax Invoices
+            const invoices = this.savedDocs.filter(d =>
+                d.type === 'Tax Invoice' &&
+                d.date >= startDate &&
+                d.date <= endDate
+            );
+
+            const b2b = [];
+            const b2c = [];
+            let totalTaxable = 0;
+            let totalGst = 0;
+
+            invoices.forEach(inv => {
+                const totals = this.getDocTotals(inv);
+                const isB2B = inv.customer && inv.customer.gstin;
+
+                if (isB2B) {
+                    b2b.push({
+                        number: inv.number,
+                        date: inv.date,
+                        gstin: inv.customer.gstin,
+                        name: inv.customer.name,
+                        taxable: totals.subtotal,
+                        gst: totals.tax
+                    });
+                } else {
+                    b2c.push({
+                        number: inv.number,
+                        date: inv.date,
+                        name: inv.customer.name,
+                        taxable: totals.subtotal,
+                        gst: totals.tax
+                    });
+                }
+
+                totalTaxable += totals.subtotal;
+                totalGst += totals.tax;
+            });
+
+            return {
+                b2b,
+                b2c,
+                totalTaxable,
+                totalGst,
+                invoiceCount: invoices.length
+            };
+        },
+
+        async calculateGSTR3B(startDate, endDate) {
+            const gstr1Data = await this.calculateGSTR1(startDate, endDate);
+
+            return {
+                outwardSupplies: {
+                    taxableValue: gstr1Data.totalTaxable,
+                    igst: 0, // Calculate based on state
+                    cgst: gstr1Data.totalGst / 2,
+                    sgst: gstr1Data.totalGst / 2,
+                    cess: 0
+                },
+                itc: {
+                    available: 0, // User input required
+                    reversed: 0
+                },
+                netTaxLiability: gstr1Data.totalGst
+            };
+        },
+
+        async calculateCMP08(quarter, year) {
+            // For composition dealers - simplified calculation
+            const [q] = quarter.split('-');
+            const quarterNum = parseInt(q.replace('Q', ''));
+            const startMonth = (quarterNum - 1) * 3 + 1;
+            const endMonth = quarterNum * 3;
+
+            const startDate = `${year}-${startMonth.toString().padStart(2, '0')}-01`;
+            const endDate = `${year}-${endMonth.toString().padStart(2, '0')}-31`;
+
+            const invoices = this.savedDocs.filter(d =>
+                d.type === 'Tax Invoice' &&
+                d.date >= startDate &&
+                d.date <= endDate
+            );
+
+            let totalTurnover = 0;
+            invoices.forEach(inv => {
+                const totals = this.getDocTotals(inv);
+                totalTurnover += totals.total;
+            });
+
+            const taxRate = 0.01; // 1% for composition
+            const taxPayable = totalTurnover * taxRate;
+
+            return {
+                turnover: totalTurnover,
+                taxRate: taxRate * 100,
+                taxPayable
+            };
+        },
+
+        async calculateGSTR9(financialYear) {
+            // Annual return - summary of all GSTR-1 and GSTR-3B
+            const fyYear = parseInt(financialYear.split('-')[0].replace('FY', ''));
+            const startDate = `${fyYear}-04-01`;
+            const endDate = `${fyYear + 1}-03-31`;
+
+            const gstr1Data = await this.calculateGSTR1(startDate, endDate);
+
+            return {
+                annualTurnover: gstr1Data.totalTaxable,
+                annualGst: gstr1Data.totalGst,
+                invoiceCount: gstr1Data.invoiceCount,
+                b2bCount: gstr1Data.b2b.length,
+                b2cCount: gstr1Data.b2c.length
+            };
+        },
+
+        async saveGstFiling(returnType, period, data, status = 'Pending') {
+            const frequency = this.gstSettings.filingFrequency;
+            const dueDate = this.calculateGstDueDate(returnType, period, frequency);
+
+            const filing = {
+                user_id: this.user?.id,
+                return_type: returnType,
+                period,
+                frequency,
+                due_date: dueDate?.toISOString().split('T')[0],
+                filed_date: status === 'Filed' ? new Date().toISOString().split('T')[0] : null,
+                status,
+                data
+            };
+
+            // Check if filing already exists
+            const { data: existing, error: fetchError } = await window.supabase
+                .from('gst_filings')
+                .select('id')
+                .eq('user_id', this.user?.id)
+                .eq('return_type', returnType)
+                .eq('period', period)
+                .single();
+
+            let error;
+            if (existing) {
+                // Update existing record
+                const result = await window.supabase
+                    .from('gst_filings')
+                    .update(filing)
+                    .eq('id', existing.id);
+                error = result.error;
+            } else {
+                // Insert new record
+                const result = await window.supabase
+                    .from('gst_filings')
+                    .insert(filing);
+                error = result.error;
+            }
+
+            if (error) {
+                console.error('Error saving GST filing:', error);
+                alert('Failed to save filing: ' + error.message);
+                return false;
+            }
+
+            await this.loadGstFilings();
+            return true;
+        },
+
+        async loadGstFilings() {
+            const { data, error } = await window.supabase
+                .from('gst_filings')
+                .select('*')
+                .eq('user_id', this.user?.id)
+                .order('due_date', { ascending: false });
+
+            if (!error) {
+                this.gstFilings = data || [];
+            }
+        },
+
+        getFilingStatus(returnType, period) {
+            const filing = this.gstFilings.find(f =>
+                f.return_type === returnType && f.period === period
+            );
+
+            if (!filing) return 'Pending';
+
+            const now = new Date();
+            const dueDate = new Date(filing.due_date);
+
+            if (filing.status === 'Filed') return 'Filed';
+            if (now > dueDate) return 'Overdue';
+            return 'Pending';
+        },
+
+        downloadGstReturnJSON(returnType, period, data) {
+            if (!data) {
+                alert('Please calculate the return first');
+                return;
+            }
+
+            const filename = `${returnType}_${period}.json`;
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+
+        downloadGstReturnExcel(returnType, period, data) {
+            if (!data) {
+                alert('Please calculate the return first');
+                return;
+            }
+
+            let csvContent = '';
+            const filename = `${returnType}_${period}.csv`;
+
+            if (returnType === 'GSTR-1') {
+                csvContent = 'GSTR-1 Summary\n\n';
+                csvContent += `Period,${period}\n`;
+                csvContent += `Total Invoices,${data.invoiceCount}\n`;
+                csvContent += `Total Taxable Value,${data.totalTaxable}\n`;
+                csvContent += `Total GST,${data.totalGst}\n\n`;
+
+                csvContent += 'B2B Invoices\n';
+                csvContent += 'Invoice No,Date,GSTIN,Customer Name,Taxable Value,GST Amount\n';
+                data.b2b.forEach(inv => {
+                    csvContent += `${inv.number},${inv.date},${inv.gstin},${inv.name},${inv.taxable},${inv.gst}\n`;
+                });
+
+                csvContent += '\nB2C Invoices\n';
+                csvContent += 'Invoice No,Date,Customer Name,Taxable Value,GST Amount\n';
+                data.b2c.forEach(inv => {
+                    csvContent += `${inv.number},${inv.date},${inv.name},${inv.taxable},${inv.gst}\n`;
+                });
+            } else if (returnType === 'GSTR-3B') {
+                csvContent = 'GSTR-3B Summary\n\n';
+                csvContent += `Period,${period}\n`;
+                csvContent += `Taxable Value,${data.outwardSupplies.taxableValue}\n`;
+                csvContent += `IGST,${data.outwardSupplies.igst}\n`;
+                csvContent += `CGST,${data.outwardSupplies.cgst}\n`;
+                csvContent += `SGST,${data.outwardSupplies.sgst}\n`;
+                csvContent += `Net Tax Liability,${data.netTaxLiability}\n`;
+            } else if (returnType === 'CMP-08') {
+                csvContent = 'CMP-08 Summary\n\n';
+                csvContent += `Period,${period}\n`;
+                csvContent += `Turnover,${data.turnover}\n`;
+                csvContent += `Tax Rate,${data.taxRate}%\n`;
+                csvContent += `Tax Payable,${data.taxPayable}\n`;
+            } else if (returnType === 'GSTR-9') {
+                csvContent = 'GSTR-9 Annual Summary\n\n';
+                csvContent += `Financial Year,${period}\n`;
+                csvContent += `Annual Turnover,${data.annualTurnover}\n`;
+                csvContent += `Annual GST,${data.annualGst}\n`;
+                csvContent += `Total Invoices,${data.invoiceCount}\n`;
+                csvContent += `B2B Count,${data.b2bCount}\n`;
+                csvContent += `B2C Count,${data.b2cCount}\n`;
+            }
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
         }
     }
 }
