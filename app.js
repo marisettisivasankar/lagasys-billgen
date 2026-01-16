@@ -31,6 +31,8 @@ function billApp() {
         gstHistory: [],
         showGstr1Details: false,
         showGstr3bPortal: false,
+        lastGstr1Result: null,
+        lastGstr3bResult: null,
         selectedGstReturn: null,
         viewDoc: null,
         showCustomerManager: false,
@@ -1590,6 +1592,8 @@ function billApp() {
                     b2b.push({
                         number: doc.number,
                         date: doc.date,
+                        poNumber: doc.poNumber || '',
+                        poDate: doc.poDate || '',
                         name: doc.customer.name,
                         gstin: doc.customer.gstin,
                         pos: pos,
@@ -1620,14 +1624,14 @@ function billApp() {
 
         exportGstr1Details() {
             const data = this.getGstr1Details();
-            let csv = "Type,Invoice No,Date,Customer Name,GSTIN,Taxable Value,GST Total\n";
+            let csv = "Type,Invoice No,Date,Customer PO No,Customer PO Date,Customer Name,GSTIN,Taxable Value,GST Total\n";
 
             data.b2b.forEach(item => {
-                csv += `B2B,${item.number},${item.date},"${item.name}",${item.gstin},${item.taxable},${item.gst}\n`;
+                csv += `B2B,${item.number},${item.date},${item.poNumber},${item.poDate},"${item.name}",${item.gstin},${item.taxable},${item.gst}\n`;
             });
 
             data.b2c.forEach(item => {
-                csv += `B2C,${item.number},${item.date},"${item.name}",,${item.taxable},${item.gst}\n`;
+                csv += `B2C,${item.number},${item.date},,, "${item.name}",,${item.taxable},${item.gst}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -1771,6 +1775,8 @@ function billApp() {
                     b2bData.push({
                         "Invoice Number": inv.number,
                         "Invoice Date": inv.date,
+                        "Customer PO No": inv.poNumber || '',
+                        "Customer PO Date": inv.poDate || '',
                         "Customer Name": inv.name,
                         "Customer GSTIN": inv.gstin,
                         "Place of Supply": inv.pos,
@@ -1996,70 +2002,115 @@ function billApp() {
         },
 
         async calculateGSTR1(startDate, endDate) {
-            // Calculate GSTR-1 from Tax Invoices
-            const invoices = this.savedDocs.filter(d =>
-                d.type === 'Tax Invoice' &&
+            // Calculate GSTR-1 from Tax Invoices, Credit Notes, and Debit Notes for the given period
+            const docs = this.savedDocs.filter(d =>
+                (d.type === 'Tax Invoice' || d.type === 'Credit Note' || d.type === 'Debit Note') &&
                 d.date >= startDate &&
                 d.date <= endDate
             );
 
             const b2b = [];
-            const b2c = [];
+            const b2cMap = {}; // Key: POS-Rate
             let totalTaxable = 0;
             let totalGst = 0;
 
-            invoices.forEach(inv => {
-                const totals = this.getDocTotals(inv);
-                const isB2B = inv.customer && inv.customer.gstin;
+            docs.forEach(doc => {
+                const multiplier = doc.type === 'Credit Note' ? -1 : 1;
+                const isB2B = doc.customer && doc.customer.gstin;
+                const pos = isB2B ? doc.customer.gstin.substring(0, 2) : (this.getGstStateCode(doc.customer.gstin) || this.doc.company.gstin.substring(0, 2));
+
+                const totals = this.getDocTotals(doc);
 
                 if (isB2B) {
+                    // Item aggregation for B2B JSON structure compatibility
+                    const rateGroups = {};
+                    doc.items.forEach(item => {
+                        const r = Number(item.taxRate || 18);
+                        if (!rateGroups[r]) rateGroups[r] = { rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
+                        const txval = (item.qty * item.rate) * multiplier;
+                        const tax = txval * (r / 100);
+                        rateGroups[r].txval += txval;
+                        if (this.isIGST(doc.customer.gstin)) rateGroups[r].iamt += tax;
+                        else {
+                            rateGroups[r].camt += tax / 2;
+                            rateGroups[r].samt += tax / 2;
+                        }
+                    });
+
                     b2b.push({
-                        number: inv.number,
-                        date: inv.date,
-                        gstin: inv.customer.gstin,
-                        name: inv.customer.name,
-                        taxable: totals.subtotal,
-                        gst: totals.tax
+                        number: doc.number,
+                        date: doc.date,
+                        poNumber: doc.poNumber || '',
+                        poDate: doc.poDate || '',
+                        gstin: doc.customer.gstin,
+                        name: doc.customer.name,
+                        taxable: totals.subtotal * multiplier,
+                        gst: totals.tax * multiplier,
+                        itms: Object.values(rateGroups)
                     });
                 } else {
-                    b2c.push({
-                        number: inv.number,
-                        date: inv.date,
-                        name: inv.customer.name,
-                        taxable: totals.subtotal,
-                        gst: totals.tax
+                    // Aggregate B2C by POS and Rate
+                    doc.items.forEach(item => {
+                        const r = Number(item.taxRate || 18);
+                        const key = `${pos}-${r}`;
+                        if (!b2cMap[key]) b2cMap[key] = { pos, rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
+                        const txval = (item.qty * item.rate) * multiplier;
+                        const tax = txval * (r / 100);
+                        b2cMap[key].txval += txval;
+                        if (pos !== this.doc.company.gstin.substring(0, 2)) b2cMap[key].iamt += tax;
+                        else {
+                            b2cMap[key].camt += tax / 2;
+                            b2cMap[key].samt += tax / 2;
+                        }
                     });
                 }
 
-                totalTaxable += totals.subtotal;
-                totalGst += totals.tax;
+                totalTaxable += (totals.subtotal * multiplier);
+                totalGst += (totals.tax * multiplier);
             });
 
             return {
                 b2b,
-                b2c,
+                b2c: Object.values(b2cMap),
                 totalTaxable,
                 totalGst,
-                invoiceCount: invoices.length
+                invoiceCount: docs.length
             };
         },
 
         async calculateGSTR3B(startDate, endDate) {
             const gstr1Data = await this.calculateGSTR1(startDate, endDate);
 
+            const portalData = {
+                table31: {
+                    a: { label: "Outward Taxable Supplies", val: gstr1Data.totalTaxable, tax: gstr1Data.totalGst },
+                    b: { label: "Outward Taxable Supplies (Zero Rated)", val: 0, tax: 0 },
+                    c: { label: "Other Outward Supplies (Nil Rated, Exempted)", val: 0, tax: 0 },
+                    d: { label: "Inward Supplies liable to Reverse Charge", val: 0, tax: 0 },
+                    e: { label: "Non-GST Outward Supplies", val: 0, tax: 0 }
+                },
+                table4: {
+                    a: { label: "ITC Available (Import of Goods/Services, Reverse Charge, etc.)", val: 0 },
+                    b: { label: "ITC Reversed", val: 0 },
+                    c: { label: "Net ITC Available", val: 0 },
+                    d: { label: "Ineligible ITC", val: 0 }
+                }
+            };
+
             return {
                 outwardSupplies: {
                     taxableValue: gstr1Data.totalTaxable,
-                    igst: 0, // Calculate based on state
+                    igst: 0,
                     cgst: gstr1Data.totalGst / 2,
                     sgst: gstr1Data.totalGst / 2,
                     cess: 0
                 },
                 itc: {
-                    available: 0, // User input required
+                    available: 0,
                     reversed: 0
                 },
-                netTaxLiability: gstr1Data.totalGst
+                netTaxLiability: gstr1Data.totalGst,
+                portalData: portalData
             };
         },
 
@@ -2223,9 +2274,9 @@ function billApp() {
                 csvContent += `Total GST,${data.totalGst}\n\n`;
 
                 csvContent += 'B2B Invoices\n';
-                csvContent += 'Invoice No,Date,GSTIN,Customer Name,Taxable Value,GST Amount\n';
+                csvContent += 'Invoice No,Date,Customer PO No,Customer PO Date,GSTIN,Customer Name,Taxable Value,GST Amount\n';
                 data.b2b.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.gstin},${inv.name},${inv.taxable},${inv.gst}\n`;
+                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${inv.taxable},${inv.gst}\n`;
                 });
 
                 csvContent += '\nB2C Invoices\n';
