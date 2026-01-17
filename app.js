@@ -16,6 +16,12 @@ function billApp() {
             docsByType: {},
             activeTab: 'Tax Invoice'
         },
+        complianceStats: {
+            score: 85,
+            punctuality: 90,
+            itcEfficiency: 75,
+            dataIntegrity: 95
+        },
         ledgerControls: {
             search: '',
             startDate: '',
@@ -136,6 +142,8 @@ function billApp() {
             customTitle: '',
             number: '', // Set in init
             currency: 'INR',
+            exchangeRate: 1,
+            exportType: 'Taxable', // 'Taxable' or 'LUT'
             date: new Date().toISOString().split('T')[0],
             validityDate: '',
             paymentTerms: '100% Advance',
@@ -461,11 +469,13 @@ function billApp() {
                 ? ['Subject to Hyderabad Jurisdiction.']
                 : (type === 'Credit Note' || type === 'Debit Note')
                     ? ['Subject to Hyderabad Jurisdiction.', 'Note being issued as per GST requirements.']
-                    : [
-                        'Subject to Hyderabad Jurisdiction.',
-                        'The software is warranted for any design defects as per specification for 1 Year.',
-                        'The above price doesn\'t include Installation and Training.'
-                    ];
+                    : (type === 'Purchase Invoice')
+                        ? ['Subject to Hyderabad Jurisdiction.', 'Input Tax Credit to be claimed as per GST rules.']
+                        : [
+                            'Subject to Hyderabad Jurisdiction.',
+                            'The software is warranted for any design defects as per specification for 1 Year.',
+                            'The above price doesn\'t include Installation and Training.'
+                        ];
             this.doc.number = this.getPreviewNumber(type);
             await this.saveCurrentDoc();
         },
@@ -914,6 +924,7 @@ function billApp() {
         },
 
         itemTaxAmount(item, docType) {
+            if (this.doc.exportType === 'LUT' && this.doc.currency !== 'INR') return 0;
             const currentType = docType || this.doc.type;
             const ratePercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
             return this.itemTaxableValue(item, currentType) * (ratePercent / 100);
@@ -931,13 +942,14 @@ function billApp() {
                 return sum + (amount - discountAmt);
             }, 0);
             const tax = (doc.items || []).reduce((sum, item) => {
+                if (doc.exportType === 'LUT' && doc.currency !== 'INR') return sum;
                 const amount = (Number(item.qty) * Number(item.rate));
                 const discountAmt = (doc.type === 'Quotation') ? amount * (Number(item.discount || 0) / 100) : 0;
                 const taxable = amount - discountAmt;
                 const rate = Number((item.taxRate !== undefined) ? item.taxRate : (doc.taxRate || 18));
                 return sum + (taxable * (rate / 100));
             }, 0);
-            return { subtotal: subt, tax: tax, total: subt + tax };
+            return { subtotal: subt, tax: tax, total: subt + tax, exchangeRate: doc.exchangeRate || 1 };
         },
 
         itemTotal(item) {
@@ -953,32 +965,22 @@ function billApp() {
         },
 
         isInterstate() {
-            const state = (this.doc.customer.state || '').toLowerCase();
-            return !state.includes('telangana');
+            return this.isIGST(this.doc);
         },
 
         cgstAmount() {
-            if (this.isInterstate()) return 0;
-            return this.doc.items.reduce((sum, item) => {
-                const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
-            }, 0);
+            if (this.isIGST(this.doc)) return 0;
+            return this.doc.items.reduce((sum, item) => sum + (this.itemTaxAmount(item) / 2), 0);
         },
 
         sgstAmount() {
-            if (this.isInterstate()) return 0;
-            return this.doc.items.reduce((sum, item) => {
-                const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                return sum + (this.itemTaxableValue(item) * (taxPercent / 100) / 2);
-            }, 0);
+            if (this.isIGST(this.doc)) return 0;
+            return this.doc.items.reduce((sum, item) => sum + (this.itemTaxAmount(item) / 2), 0);
         },
 
         igstAmount() {
-            if (!this.isInterstate()) return 0;
-            return this.doc.items.reduce((sum, item) => {
-                const taxPercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
-                return sum + (this.itemTaxableValue(item) * (taxPercent / 100));
-            }, 0);
+            if (!this.isIGST(this.doc)) return 0;
+            return this.doc.items.reduce((sum, item) => sum + this.itemTaxAmount(item), 0);
         },
 
         taxAmount() {
@@ -1190,40 +1192,68 @@ function billApp() {
             if (n < 0) return "Negative " + this.numberToWords(-n, currencyCode);
             const curr = (this.currencies || []).find(c => c.code === (currencyCode || 'INR'));
             let currencyWord = 'RUPEES';
+            let subunitWord = 'PAISE';
+
             if (curr && curr.name) {
                 const parts = curr.name.split(' ');
                 let last = parts[parts.length - 1].toUpperCase();
                 if (!last.endsWith('S')) last = last + 'S';
                 currencyWord = last;
+                if (currencyCode === 'USD' || currencyCode === 'EUR') subunitWord = 'CENTS';
             }
+
+            const whole = Math.floor(n);
+            const fraction = Math.round((n - whole) * 100);
+
             if (n === 0) return `ZERO ${currencyWord} ONLY`;
+
             const single = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
             const double = ["TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
             const tens = ["", "TEN", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
-            const format = (n, suffix) => {
-                if (n === 0) return "";
+
+            const formatNum = (num) => {
                 let str = "";
-                if (n > 99) {
-                    str += single[Math.floor(n / 100)] + " HUNDRED ";
-                    n %= 100;
+                if (num > 99) {
+                    str += single[Math.floor(num / 100)] + " HUNDRED ";
+                    num %= 100;
                 }
-                if (n > 19) {
-                    str += tens[Math.floor(n / 10)] + " ";
-                    n %= 10;
+                if (num > 19) {
+                    str += tens[Math.floor(num / 10)] + " ";
+                    num %= 10;
                 }
-                if (n > 9) {
-                    str += double[n - 10] + " ";
-                } else if (n > 0) {
-                    str += single[n] + " ";
+                if (num > 9) {
+                    str += double[num - 10] + " ";
+                } else if (num > 0) {
+                    str += single[num] + " ";
                 }
-                return str + suffix + " ";
+                return str;
             };
+
             let res = "";
-            res += format(Math.floor(n / 10000000), "CRORE");
-            res += format(Math.floor((n / 100000) % 100), "LAKH");
-            res += format(Math.floor((n / 1000) % 100), "THOUSAND");
-            res += format(Math.floor(n % 1000), "");
-            return (res.trim() + ` ${currencyWord} ONLY`).replace(/\s+/g, ' ');
+            if (currencyCode === 'INR') {
+                const formatIndian = (num, suffix) => {
+                    if (num === 0) return "";
+                    return formatNum(num) + suffix + " ";
+                };
+                res += formatIndian(Math.floor(whole / 10000000), "CRORE");
+                res += formatIndian(Math.floor((whole / 100000) % 100), "LAKH");
+                res += formatIndian(Math.floor((whole / 1000) % 100), "THOUSAND");
+                res += formatNum(whole % 1000);
+            } else {
+                const formatInternational = (num, suffix) => {
+                    if (num === 0) return "";
+                    return formatNum(num) + suffix + " ";
+                };
+                res += formatInternational(Math.floor(whole / 1000000), "MILLION");
+                res += formatInternational(Math.floor((whole / 1000) % 1000), "THOUSAND");
+                res += formatNum(whole % 1000);
+            }
+
+            let finalStr = res.trim() + ` ${currencyWord}`;
+            if (fraction > 0) {
+                finalStr += " AND " + formatNum(fraction).trim() + ` ${subunitWord}`;
+            }
+            return (finalStr + " ONLY").replace(/\s+/g, ' ');
         },
 
         openEmailClient() {
@@ -1331,8 +1361,9 @@ function billApp() {
                 if (isB2B) b2bCount++; else b2cCount++;
 
                 const docStats = this.getDocTotals(doc);
-                const taxable = docStats.subtotal;
-                const gst = docStats.tax;
+                const exRate = doc.exchangeRate || 1;
+                const taxable = docStats.subtotal * exRate;
+                const gst = docStats.tax * exRate;
 
                 if (doc.type === 'Credit Note') {
                     totalTaxable -= taxable;
@@ -1385,22 +1416,23 @@ function billApp() {
                 const multiplier = isCreditNote ? -1 : 1;
 
                 if (isInvoice || isCreditNote) {
+                    const exRate = doc.exchangeRate || 1;
                     // Revenue (Month) - Matches Month AND Year
                     if (docDate.getMonth() === currentMonth && docDate.getFullYear() === currentYear) {
-                        newStats.monthlyRevenue += totals.subtotal * multiplier;
+                        newStats.monthlyRevenue += totals.subtotal * multiplier * exRate;
                     }
 
                     // Revenue (Annual FY) - Starts April 1st
                     const fyStartDate = new Date(fyStartYear, 3, 1);
                     if (docDate >= fyStartDate) {
-                        newStats.annualRevenue += totals.subtotal * multiplier;
+                        newStats.annualRevenue += totals.subtotal * multiplier * exRate;
                     }
 
                     // Payment Metrics
                     if (doc.status !== 'PAID') {
-                        newStats.outstanding += totals.total * multiplier;
+                        newStats.outstanding += totals.total * multiplier * exRate;
                     } else {
-                        newStats.collected += totals.total * multiplier;
+                        newStats.collected += totals.total * multiplier * exRate;
                     }
 
                     // Top Customers
@@ -1881,9 +1913,14 @@ function billApp() {
             return Object.values(hsnMap);
         },
 
-        isIGST(targetGstin) {
+        isIGST(doc) {
+            // If it's a doc object (for dashboard/history)
+            const targetGstin = doc?.customer?.gstin || doc;
+            const isForeign = doc?.currency && doc.currency !== 'INR';
+            if (isForeign) return true; // Exports are treated as IGST (Inter-state)
             if (!targetGstin || !this.doc.company.gstin) return false;
-            return targetGstin.substring(0, 2) !== this.doc.company.gstin.substring(0, 2);
+            const gstinStr = typeof targetGstin === 'string' ? targetGstin : '';
+            return gstinStr.substring(0, 2) !== this.doc.company.gstin.substring(0, 2);
         },
 
         getGstr3bPortalData() {
@@ -1941,6 +1978,16 @@ function billApp() {
             return this.gstReturnTypes.filter(rt =>
                 rt.applicableTo.includes(this.gstSettings.taxpayerType)
             );
+        },
+
+        isValidGstin(gstin) {
+            const regex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            return regex.test(gstin);
+        },
+
+        isValidHsn(hsn) {
+            const regex = /^\d{4}(\d{2})?(\d{2})?$/;
+            return regex.test(hsn);
         },
 
         calculateGstDueDate(returnType, period, frequency) {
@@ -2011,6 +2058,7 @@ function billApp() {
 
             const b2b = [];
             const b2cMap = {}; // Key: POS-Rate
+            const hsnMap = {}; // Key: HSN-Rate
             let totalTaxable = 0;
             let totalGst = 0;
 
@@ -2021,22 +2069,57 @@ function billApp() {
 
                 const totals = this.getDocTotals(doc);
 
+                // Aggregate HSN Summary (Section 12)
+                doc.items.forEach(item => {
+                    const hsn = item.hsn || '999999'; // Default HSN
+                    const r = Number(item.taxRate || 18);
+                    const hsnKey = `${hsn}-${r}`;
+
+                    if (!hsnMap[hsnKey]) {
+                        hsnMap[hsnKey] = { hsn, uqc: 'NOS', qty: 0, txval: 0, iamt: 0, camt: 0, samt: 0, rt: r };
+                    }
+
+                    const exRate = doc.exchangeRate || 1;
+                    const itemTxval = (item.qty * item.rate) * multiplier * exRate;
+                    const itemTax = itemTxval * (r / 100);
+
+                    hsnMap[hsnKey].qty += (item.qty * multiplier);
+                    hsnMap[hsnKey].txval += itemTxval;
+
+                    if (isB2B && this.isIGST(doc.customer.gstin)) {
+                        hsnMap[hsnKey].iamt += itemTax;
+                    } else if (isB2B) {
+                        hsnMap[hsnKey].camt += itemTax / 2;
+                        hsnMap[hsnKey].samt += itemTax / 2;
+                    } else {
+                        // For B2C, check POS vs Company GSTIN
+                        if (pos !== this.doc.company.gstin.substring(0, 2)) {
+                            hsnMap[hsnKey].iamt += itemTax;
+                        } else {
+                            hsnMap[hsnKey].camt += itemTax / 2;
+                            hsnMap[hsnKey].samt += itemTax / 2;
+                        }
+                    }
+                });
+
                 if (isB2B) {
                     // Item aggregation for B2B JSON structure compatibility
                     const rateGroups = {};
                     doc.items.forEach(item => {
                         const r = Number(item.taxRate || 18);
                         if (!rateGroups[r]) rateGroups[r] = { rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
-                        const txval = (item.qty * item.rate) * multiplier;
+                        const exRate = doc.exchangeRate || 1;
+                        const txval = (item.qty * item.rate) * multiplier * exRate;
                         const tax = txval * (r / 100);
                         rateGroups[r].txval += txval;
-                        if (this.isIGST(doc.customer.gstin)) rateGroups[r].iamt += tax;
+                        if (this.isIGST(doc)) rateGroups[r].iamt += tax;
                         else {
                             rateGroups[r].camt += tax / 2;
                             rateGroups[r].samt += tax / 2;
                         }
                     });
 
+                    const itms = Object.values(rateGroups);
                     b2b.push({
                         number: doc.number,
                         date: doc.date,
@@ -2044,9 +2127,12 @@ function billApp() {
                         poDate: doc.poDate || '',
                         gstin: doc.customer.gstin,
                         name: doc.customer.name,
-                        taxable: totals.subtotal * multiplier,
-                        gst: totals.tax * multiplier,
-                        itms: Object.values(rateGroups)
+                        taxable: (totals.subtotal * multiplier) * (doc.exchangeRate || 1),
+                        gst: (totals.tax * multiplier) * (doc.exchangeRate || 1),
+                        iamt: itms.reduce((s, i) => s + i.iamt, 0),
+                        camt: itms.reduce((s, i) => s + i.camt, 0),
+                        samt: itms.reduce((s, i) => s + i.samt, 0),
+                        itms: itms
                     });
                 } else {
                     // Aggregate B2C by POS and Rate
@@ -2054,11 +2140,13 @@ function billApp() {
                         const r = Number(item.taxRate || 18);
                         const key = `${pos}-${r}`;
                         if (!b2cMap[key]) b2cMap[key] = { pos, rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
-                        const txval = (item.qty * item.rate) * multiplier;
+                        const exRate = doc.exchangeRate || 1;
+                        const txval = (item.qty * item.rate) * multiplier * exRate;
                         const tax = txval * (r / 100);
                         b2cMap[key].txval += txval;
-                        if (pos !== this.doc.company.gstin.substring(0, 2)) b2cMap[key].iamt += tax;
-                        else {
+                        if (pos !== this.doc.company.gstin.substring(0, 2) || (doc.currency && doc.currency !== 'INR')) {
+                            b2cMap[key].iamt += tax;
+                        } else {
                             b2cMap[key].camt += tax / 2;
                             b2cMap[key].samt += tax / 2;
                         }
@@ -2072,14 +2160,33 @@ function billApp() {
             return {
                 b2b,
                 b2c: Object.values(b2cMap),
+                hsnSummary: Object.values(hsnMap),
                 totalTaxable,
                 totalGst,
+                iamt: b2b.reduce((s, i) => s + i.iamt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.iamt, 0),
+                camt: b2b.reduce((s, i) => s + i.camt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.camt, 0),
+                samt: b2b.reduce((s, i) => s + i.samt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.samt, 0),
                 invoiceCount: docs.length
             };
         },
 
         async calculateGSTR3B(startDate, endDate) {
             const gstr1Data = await this.calculateGSTR1(startDate, endDate);
+
+            // Fetch Purchase Invoices for ITC
+            const purchases = this.savedDocs.filter(d =>
+                d.type === 'Purchase Invoice' &&
+                d.date >= startDate &&
+                d.date <= endDate
+            ).map(d => d.raw || d);
+
+            let itcTotal = 0;
+            purchases.forEach(p => {
+                p.items.forEach(item => {
+                    const exRate = p.exchangeRate || 1;
+                    itcTotal += (item.qty * item.rate) * (r / 100) * exRate;
+                });
+            });
 
             const portalData = {
                 table31: {
@@ -2090,9 +2197,9 @@ function billApp() {
                     e: { label: "Non-GST Outward Supplies", val: 0, tax: 0 }
                 },
                 table4: {
-                    a: { label: "ITC Available (Import of Goods/Services, Reverse Charge, etc.)", val: 0 },
+                    a: { label: "ITC Available (All other ITC)", val: itcTotal },
                     b: { label: "ITC Reversed", val: 0 },
-                    c: { label: "Net ITC Available", val: 0 },
+                    c: { label: "Net ITC Available", val: itcTotal },
                     d: { label: "Ineligible ITC", val: 0 }
                 }
             };
@@ -2100,18 +2207,32 @@ function billApp() {
             return {
                 outwardSupplies: {
                     taxableValue: gstr1Data.totalTaxable,
-                    igst: 0,
-                    cgst: gstr1Data.totalGst / 2,
-                    sgst: gstr1Data.totalGst / 2,
+                    igst: gstr1Data.iamt,
+                    cgst: gstr1Data.camt,
+                    sgst: gstr1Data.samt,
                     cess: 0
                 },
                 itc: {
-                    available: 0,
+                    available: itcTotal,
                     reversed: 0
                 },
-                netTaxLiability: gstr1Data.totalGst,
+                netTaxLiability: Math.max(0, gstr1Data.totalGst - itcTotal),
                 portalData: portalData
             };
+        },
+
+        updateComplianceHealth() {
+            // Logic to calculate compliance metrics based on savedDocs and gstHistory
+            const totalReturns = this.gstHistory.length;
+            if (totalReturns === 0) return;
+
+            // Simplified calculation for demonstration
+            const validGstins = this.masterData.customers.filter(c => this.isValidGstin(c.gstin)).length;
+            const totalCustomers = this.masterData.customers.length || 1;
+            this.complianceStats.dataIntegrity = Math.round((validGstins / totalCustomers) * 100);
+
+            // Score based on integrity and simulated punctuality
+            this.complianceStats.score = Math.round((this.complianceStats.dataIntegrity + this.complianceStats.punctuality + this.complianceStats.itcEfficiency) / 3);
         },
 
         async calculateCMP08(quarter, year) {
@@ -2274,16 +2395,26 @@ function billApp() {
                 csvContent += `Total GST,${data.totalGst}\n\n`;
 
                 csvContent += 'B2B Invoices\n';
-                csvContent += 'Invoice No,Date,Customer PO No,Customer PO Date,GSTIN,Customer Name,Taxable Value,GST Amount\n';
+                csvContent += 'Invoice No,Date,Customer PO No,Customer PO Date,GSTIN,Customer Name,Taxable Value,IGST,CGST,SGST,Total GST\n';
                 data.b2b.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${inv.taxable},${inv.gst}\n`;
+                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${inv.taxable},${inv.iamt || 0},${inv.camt || 0},${inv.samt || 0},${inv.gst}\n`;
                 });
 
-                csvContent += '\nB2C Invoices\n';
-                csvContent += 'Invoice No,Date,Customer Name,Taxable Value,GST Amount\n';
-                data.b2c.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.name},${inv.taxable},${inv.gst}\n`;
+                csvContent += '\nSection 7 - B2C (Others) Aggregated\n';
+                csvContent += 'Place of Supply,Rate,Taxable Value,IGST,CGST,SGST,Total GST\n';
+                data.b2c.forEach(row => {
+                    const totalGst = (row.iamt || 0) + (row.camt || 0) + (row.samt || 0);
+                    csvContent += `${row.pos},${row.rt}%,${row.txval},${row.iamt},${row.camt},${row.samt},${totalGst}\n`;
                 });
+
+                if (data.hsnSummary) {
+                    csvContent += '\nSection 12 - HSN Summary\n';
+                    csvContent += 'HSN/SAC,Description,UQC,Quantity,Taxable Value,IGST,CGST,SGST,Total GST\n';
+                    data.hsnSummary.forEach(h => {
+                        const totalGst = (h.iamt || 0) + (h.camt || 0) + (h.samt || 0);
+                        csvContent += `${h.hsn},Service/Product,${h.uqc},${h.qty},${h.txval},${h.iamt},${h.camt},${h.samt},${totalGst}\n`;
+                    });
+                }
             } else if (returnType === 'GSTR-3B') {
                 csvContent = 'GSTR-3B Summary\n\n';
                 csvContent += `Period,${period}\n`;
