@@ -6,6 +6,7 @@ function billApp() {
         showHistory: false,
         showSettings: false,
         showDashboard: false,
+        showLedger: false,
         dashboardStats: {
             monthlyRevenue: 0,
             annualRevenue: 0,
@@ -15,6 +16,14 @@ function billApp() {
             conversion: { quotes: 0, invoices: 0, rate: 0 },
             docsByType: {},
             activeTab: 'Tax Invoice'
+        },
+        toasts: [],
+        notify(message, type = 'info', duration = 3000) {
+            const id = Date.now();
+            this.toasts.push({ id, message, type });
+            setTimeout(() => {
+                this.toasts = this.toasts.filter(t => t.id !== id);
+            }, duration);
         },
         complianceStats: {
             score: 85,
@@ -32,7 +41,8 @@ function billApp() {
         gstView: 'returns', // 'returns', 'calendar', 'reports'
         gstReturns: {
             gstr1: { status: 'Draft', period: '' },
-            gstr3b: { status: 'Draft', period: '' }
+            gstr3b: { status: 'Draft', period: '' },
+            gstr9: { status: 'Draft', period: '' }
         },
         gstHistory: [],
         showGstr1Details: false,
@@ -105,6 +115,14 @@ function billApp() {
                 applicableTo: ['Regular'],
                 frequencies: ['Annual'],
                 dueDateAnnual: { month: 12, day: 31 } // 31st December of following FY
+            },
+            {
+                code: 'GSTR-9C',
+                name: 'GSTR-9C',
+                description: 'Annual reconciliation statement (> ₹5 Crore)',
+                applicableTo: ['Regular'],
+                frequencies: ['Annual'],
+                dueDateAnnual: { month: 12, day: 31 }
             }
         ],
         gstFilings: [], // Will store filing records from Supabase
@@ -220,6 +238,8 @@ function billApp() {
         allowedTaxSlabs: [0, 5, 18, 40],
 
         async init() {
+
+
             lucide.createIcons();
             this.showGstHistoryDetail = false; // Force close on load
             console.log('App Init: Checking Auth Session...');
@@ -283,9 +303,9 @@ function billApp() {
                     }
                 });
                 if (error) throw error;
-                // Since email confirmation is disabled in Supabase, the session will be established immediately
+                this.notify('Check your email for confirmation link', 'info', 6000);
             } catch (err) {
-                alert(err.message);
+                this.notify(err.message, 'error');
             } finally {
                 this.authLoading = false;
             }
@@ -299,8 +319,9 @@ function billApp() {
                     password: this.authPassword
                 });
                 if (error) throw error;
+                this.notify('Logged in successfully!', 'success');
             } catch (err) {
-                alert(err.message);
+                this.notify(err.message, 'error');
             } finally {
                 this.authLoading = false;
             }
@@ -310,8 +331,10 @@ function billApp() {
             console.log('Sign Out Initiated...');
             try {
                 await window.supabase.auth.signOut();
+                this.notify('Logged out successfully', 'success');
             } catch (err) {
                 console.error('Supabase SignOut Error:', err);
+                this.notify('Failed to log out: ' + err.message, 'error');
             }
             this.forceLogout();
         },
@@ -529,11 +552,11 @@ function billApp() {
         async saveToMaster(type) {
             if (type === 'customer') {
                 await this.saveCustomerToDB();
-                alert('Customer saved to database!');
+                this.notify('Customer saved to database!', 'success');
             }
             if (type === 'product') {
                 await this.saveProductsToDB();
-                alert('Products saved to database!');
+                this.notify('Products saved to database!', 'success');
             }
         },
 
@@ -599,7 +622,7 @@ function billApp() {
 
         async saveProductForm() {
             if (!this.prodForm.desc) {
-                alert('Product Description is required');
+                this.notify('Product Description is required', 'warning');
                 return;
             }
 
@@ -619,11 +642,11 @@ function billApp() {
 
             if (error) {
                 console.error('Save Product Error:', error);
-                alert('Failed to save product: ' + error.message);
+                this.notify('Failed to save product: ' + error.message, 'error');
                 return;
             }
 
-            alert('Product saved successfully!');
+            this.notify('Product saved successfully!', 'success');
             this.resetProductForm();
             await this.loadProducts();
         },
@@ -637,8 +660,9 @@ function billApp() {
                 .eq('id', id);
 
             if (error) {
-                alert('Failed to delete: ' + error.message);
+                this.notify('Failed to delete: ' + error.message, 'error');
             } else {
+                this.notify('Product deleted', 'success');
                 await this.loadProducts();
             }
         },
@@ -659,7 +683,7 @@ function billApp() {
 
         async saveCustomerForm() {
             if (!this.custForm.name) {
-                alert('Customer Name is required');
+                this.notify('Customer Name is required', 'warning');
                 return;
             }
 
@@ -689,11 +713,11 @@ function billApp() {
 
             if (error) {
                 console.error('Save Customer Error:', error);
-                alert('Failed to save customer: ' + error.message);
+                this.notify('Failed to save customer: ' + error.message, 'error');
                 return;
             }
 
-            alert('Customer saved successfully!');
+            this.notify('Customer saved successfully!', 'success');
             this.resetCustomerForm();
             await this.loadCustomers(); // Reload list
         },
@@ -707,15 +731,16 @@ function billApp() {
                 .eq('id', id);
 
             if (error) {
-                alert('Failed to delete: ' + error.message);
+                this.notify('Failed to delete: ' + error.message, 'error');
             } else {
+                this.notify('Customer deleted', 'success');
                 await this.loadCustomers();
             }
         },
 
         async loadDocumentByNumber() {
             if (!this.searchNumber) {
-                alert('Please enter a document number');
+                this.notify('Please enter a document number', 'warning');
                 return;
             }
             const { data, error } = await window.supabase
@@ -724,12 +749,12 @@ function billApp() {
                 .eq('number', this.searchNumber)
                 .single();
             if (error || !data) {
-                alert('Document not found');
+                this.notify('Document not found', 'error');
                 return;
             }
             this.doc = { ...this.doc, ...data };
             this.searchNumber = '';
-            alert(`Loaded ${data.status} document`);
+            this.notify(`Loaded ${data.status} document`, 'success');
         },
 
         async saveGlobalBanks() {
@@ -742,7 +767,7 @@ function billApp() {
                 },
                 updated_at: new Date()
             });
-            alert('Settings saved');
+            this.notify('Settings saved', 'success');
         },
 
         async loadGlobalBanks() {
@@ -778,7 +803,7 @@ function billApp() {
 
         async saveDocToHistory() {
             if (!this.doc.number) {
-                alert('Please generate document number first');
+                this.notify('Please generate document number first', 'warning');
                 return;
             }
             const payload = {
@@ -804,10 +829,10 @@ function billApp() {
                 .from('documents')
                 .upsert(payload, { onConflict: 'number' });
             if (error) {
-                alert('Draft save failed: ' + error.message);
+                this.notify('Draft save failed: ' + error.message, 'error');
                 return;
             }
-            alert('Draft saved (temporary)');
+            this.notify('Draft saved (temporary)', 'success');
             await this.loadHistory(); // Reload to refresh dashboard
         },
 
@@ -837,8 +862,9 @@ function billApp() {
                 console.error('Error updating status:', error);
                 // Revert on error
                 doc.status = newStatus === 'PAID' ? 'UNPAID' : 'PAID';
-                alert('Failed to update status');
+                this.notify('Failed to update status: ' + error.message, 'error');
             } else {
+                this.notify('Document status updated to ' + newStatus, 'success');
                 // Update stats if needed
                 this.updateExecutiveStats();
             }
@@ -854,6 +880,7 @@ function billApp() {
                 };
                 this.showHistory = false;
                 this.saveCurrentDoc();
+                this.notify('Document loaded from history', 'info');
             }
         },
 
@@ -866,8 +893,9 @@ function billApp() {
                     .eq('number', doc.number);
                 if (!error) {
                     this.savedDocs.splice(index, 1);
+                    this.notify('Document deleted successfully', 'success');
                 } else {
-                    alert('Delete failed');
+                    this.notify('Failed to delete document: ' + error.message, 'error');
                 }
             }
         },
@@ -913,6 +941,7 @@ function billApp() {
                         'The above price doesn\'t include Installation and Training.'
                     ];
                 this.saveCurrentDoc();
+                this.notify('Document cleared', 'info');
             }
         },
 
@@ -1146,7 +1175,7 @@ function billApp() {
                 const { error: saveError } = await window.supabase.from('documents').insert(payload);
                 if (saveError) {
                     console.error('Final save error:', saveError);
-                    alert('Permanent save failed: ' + saveError.message);
+                    this.notify('Permanent save failed: ' + saveError.message, 'error');
                     return;
                 }
 
@@ -1167,10 +1196,10 @@ function billApp() {
                 document.title = oldTitle;
                 await this.resetDraftOnly();
                 await this.loadHistory();
-                alert('Document saved and PDF generated successfully!');
+                this.notify('Document saved and PDF generated successfully!', 'success');
             } catch (err) {
                 console.error('Save PDF Error:', err);
-                alert('Error saving PDF: ' + (err.message || err));
+                this.notify('Error saving PDF: ' + (err.message || err), 'error');
             } finally {
                 this.isSaving = false;
             }
@@ -1292,10 +1321,10 @@ function billApp() {
 
             try {
                 await navigator.clipboard.writeText(body);
-                alert('Email draft copied to clipboard!');
+                this.notify('Email draft copied to clipboard!', 'success');
             } catch (err) {
                 console.error('Failed to copy:', err);
-                alert('Failed to copy to clipboard');
+                this.notify('Failed to copy to clipboard', 'error');
             }
         },
 
@@ -1307,7 +1336,7 @@ function billApp() {
                 this.doc.number = this.getPreviewNumber(this.doc.type);
                 this.showHistory = false;
                 await this.saveCurrentDoc();
-                alert('Document duplicated! Document number reset to preview.');
+                this.notify('Document duplicated! Document number reset to preview.', 'success');
             }
         },
 
@@ -1385,12 +1414,15 @@ function billApp() {
             // FY Calculation (April to March)
             let fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
+            const currentTab = this.dashboardStats ? this.dashboardStats.activeTab : 'Quotation';
+
             const newStats = {
                 monthlyRevenue: 0,
                 annualRevenue: 0,
                 outstanding: 0,
                 collected: 0,
                 topCustomers: [],
+                activeTab: currentTab,
                 conversion: {
                     quotes: 0,
                     invoices: 0,
@@ -1491,6 +1523,16 @@ function billApp() {
             }
         },
 
+        loadDashboard() {
+            this.updateExecutiveStats();
+        },
+
+        openLedger(type) {
+            this.dashboardStats.activeTab = type;
+            this.loadDashboard();
+            this.showLedger = true;
+        },
+
         loadDocForView(id) {
             const doc = this.savedDocs.find(d => d.id === id);
             if (doc) {
@@ -1539,6 +1581,7 @@ function billApp() {
 
                 this.showDashboard = false;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                this.notify('Document loaded for revision', 'info');
             }
         },
 
@@ -1579,7 +1622,7 @@ function billApp() {
             }));
 
             if (data.length === 0) {
-                alert('No data to export!');
+                this.notify('No data to export!', 'warning');
                 return;
             }
 
@@ -1587,6 +1630,7 @@ function billApp() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Ledger");
             XLSX.writeFile(wb, `${type}_Ledger_Export.xlsx`);
+            this.notify('Ledger exported successfully!', 'success');
         },
 
         getGstr1Details() {
@@ -1675,6 +1719,7 @@ function billApp() {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+            this.notify('GSTR-1 details exported to CSV', 'success');
         },
 
         generateGstr1Json() {
@@ -1743,6 +1788,7 @@ function billApp() {
             a.setAttribute('href', url);
             a.setAttribute('download', `GSTR1_${this.doc.company.gstin}_${period}.json`);
             a.click();
+            this.notify('GSTR-1 JSON generated and downloaded', 'success');
         },
 
         generateGstr3bJson() {
@@ -1793,6 +1839,7 @@ function billApp() {
             a.setAttribute('href', url);
             a.setAttribute('download', `GSTR3B_${this.doc.company.gstin}_${period}.json`);
             a.click();
+            this.notify('GSTR-3B JSON generated and downloaded', 'success');
         },
 
         exportGstr1Excel() {
@@ -1851,6 +1898,7 @@ function billApp() {
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hsnData), "HSN");
 
             XLSX.writeFile(wb, `GSTR1_${this.doc.company.gstin}_${period}.xlsx`);
+            this.notify('GSTR-1 Excel generated and downloaded', 'success');
         },
 
         exportGstr3bExcel() {
@@ -1877,6 +1925,7 @@ function billApp() {
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(table4), "Table 4");
 
             XLSX.writeFile(wb, `GSTR3B_${this.doc.company.gstin}_${period}.xlsx`);
+            this.notify('GSTR-3B Excel generated and downloaded', 'success');
         },
 
         getHsnSummary() {
@@ -1954,9 +2003,12 @@ function billApp() {
             };
             const { error } = await window.supabase.from('gst_returns').upsert(payload);
             if (!error) {
-                alert(`${type} saved to persistent registry`);
+                this.notify(`${type} saved to persistent registry`, 'success');
                 await this.loadGstReturns();
-            } else console.error('GST Save Error:', error);
+            } else {
+                console.error('GST Save Error:', error);
+                this.notify('Failed to save GST return: ' + error.message, 'error');
+            }
         },
 
         async loadGstReturns() {
@@ -2184,6 +2236,7 @@ function billApp() {
             purchases.forEach(p => {
                 p.items.forEach(item => {
                     const exRate = p.exchangeRate || 1;
+                    const r = Number(item.taxRate || 18);
                     itcTotal += (item.qty * item.rate) * (r / 100) * exRate;
                 });
             });
@@ -2269,18 +2322,51 @@ function billApp() {
 
         async calculateGSTR9(financialYear) {
             // Annual return - summary of all GSTR-1 and GSTR-3B
+            // Financial Year format: 'FY2025-26'
             const fyYear = parseInt(financialYear.split('-')[0].replace('FY', ''));
             const startDate = `${fyYear}-04-01`;
             const endDate = `${fyYear + 1}-03-31`;
 
             const gstr1Data = await this.calculateGSTR1(startDate, endDate);
+            const gstr3bData = await this.calculateGSTR3B(startDate, endDate);
+
+            // GSTR-9 specific tables aggregation
+            // Table 4: Details of outward and inward supplies on which tax is payable
+            const table4 = {
+                b2b: {
+                    txval: gstr1Data.b2b.reduce((s, i) => s + i.taxable, 0),
+                    iamt: gstr1Data.b2b.reduce((s, i) => s + i.iamt, 0),
+                    camt: gstr1Data.b2b.reduce((s, i) => s + i.camt, 0),
+                    samt: gstr1Data.b2b.reduce((s, i) => s + i.samt, 0)
+                },
+                b2c: {
+                    txval: gstr1Data.b2c.reduce((s, i) => s + i.txval, 0),
+                    iamt: gstr1Data.b2c.reduce((s, i) => s + i.iamt, 0),
+                    camt: gstr1Data.b2c.reduce((s, i) => s + i.camt, 0),
+                    samt: gstr1Data.b2c.reduce((s, i) => s + i.samt, 0)
+                },
+                exports: { txval: 0, iamt: 0 }, // Placeholder for advanced export tracking
+                advances: { txval: 0, iamt: 0, camt: 0, samt: 0 }
+            };
+
+            // Table 17: HSN Wise Summary of outward supplies
+            const table17 = gstr1Data.hsnSummary;
 
             return {
+                financialYear,
+                period: financialYear,
                 annualTurnover: gstr1Data.totalTaxable,
                 annualGst: gstr1Data.totalGst,
+                iamt: gstr1Data.iamt,
+                camt: gstr1Data.camt,
+                samt: gstr1Data.samt,
+                itc: gstr3bData.itc,
                 invoiceCount: gstr1Data.invoiceCount,
                 b2bCount: gstr1Data.b2b.length,
-                b2cCount: gstr1Data.b2c.length
+                b2cCount: gstr1Data.b2c.length,
+                table4,
+                table17,
+                needsGstr9c: gstr1Data.totalTaxable > 50000000 // > 5 Crore
             };
         },
 
@@ -2326,10 +2412,11 @@ function billApp() {
 
             if (error) {
                 console.error('Error saving GST filing:', error);
-                alert('Failed to save filing: ' + error.message);
+                this.notify('Failed to save filing: ' + error.message, 'error');
                 return false;
             }
 
+            this.notify('GST filing saved successfully!', 'success');
             await this.loadGstFilings();
             return true;
         },
@@ -2436,7 +2523,20 @@ function billApp() {
                 csvContent += `Annual GST,${data.annualGst}\n`;
                 csvContent += `Total Invoices,${data.invoiceCount}\n`;
                 csvContent += `B2B Count,${data.b2bCount}\n`;
-                csvContent += `B2C Count,${data.b2cCount}\n`;
+                csvContent += `B2C Count,${data.b2cCount}\n\n`;
+
+                csvContent += 'Table 4 - Outward Supplies on which tax is payable\n';
+                csvContent += 'Nature of Supply,Taxable Value,IGST,CGST,SGST\n';
+                csvContent += `B2B,${data.table4.b2b.txval},${data.table4.b2b.iamt},${data.table4.b2b.camt},${data.table4.b2b.samt}\n`;
+                csvContent += `B2C,${data.table4.b2c.txval},${data.table4.b2c.iamt},${data.table4.b2c.camt},${data.table4.b2c.samt}\n\n`;
+
+                if (data.table17) {
+                    csvContent += 'Table 17 - HSN Summary\n';
+                    csvContent += 'HSN/SAC,UQC,Quantity,Taxable Value,IGST,CGST,SGST\n';
+                    data.table17.forEach(h => {
+                        csvContent += `${h.hsn},${h.uqc},${h.qty},${h.txval},${h.iamt},${h.camt},${h.samt}\n`;
+                    });
+                }
             }
 
             const blob = new Blob([csvContent], { type: 'text/csv' });
