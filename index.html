@@ -190,6 +190,12 @@
                             <span>Accounts</span>
                         </button>
 
+                        <button @click="openContactManager(); open = false"
+                            class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
+                            <i data-lucide="user-plus" class="w-4 h-4 text-slate-400"></i>
+                            <span>Contacts</span>
+                        </button>
+
                         <button @click="openProductManager(); open = false"
                             class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 text-sm text-slate-700 font-medium transition-colors">
                             <i data-lucide="package" class="w-4 h-4 text-slate-400"></i>
@@ -3956,6 +3962,228 @@
                 </button>
             </div>
         </template>
+    </div>
+
+    <!-- Contact Management Full-Screen -->
+    <div x-show="showContactManager" x-cloak class="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden"
+        x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4"
+        x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-4">
+
+        <!-- Header -->
+        <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-20">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-50 p-2.5 rounded-2xl">
+                    <i data-lucide="user-plus" class="w-6 h-6 text-blue-600"></i>
+                </div>
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Contact Management</h2>
+            </div>
+            <button @click="showContactManager = false"
+                class="p-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all group">
+                <i data-lucide="x" class="w-6 h-6 text-slate-400 group-hover:text-slate-600"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+            <!-- Top Actions Bar (Only shown when not in form view) -->
+            <div x-show="!showContactForm"
+                class="px-10 py-6 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
+                <div class="flex items-center space-x-6 flex-1 max-w-2xl">
+                    <button @click="resetContactForm()"
+                        class="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center shrink-0">
+                        <i data-lucide="plus" class="w-5 h-5 mr-2"></i>
+                        Add New Contact
+                    </button>
+                    <div class="relative group flex-1">
+                        <i data-lucide="search"
+                            class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"></i>
+                        <input type="text" x-model="contactSearch"
+                            placeholder="Search contacts by name, email, or account..."
+                            class="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span
+                        class="px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-black uppercase tracking-wider"
+                        x-text="masterData.contacts.length + ' Contacts Available'"></span>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="flex-1 overflow-y-auto p-10">
+                <div class="max-w-6xl mx-auto">
+
+                    <!-- Form View (New/Edit) -->
+                    <div x-show="showContactForm" x-transition:enter="transition ease-out duration-300 transform"
+                        x-transition:enter-start="translate-y-4 opacity-0"
+                        x-transition:enter-end="translate-y-0 opacity-100" class="space-y-8">
+
+                        <div class="flex items-center justify-between mb-2">
+                            <button @click="showContactForm = false"
+                                class="flex items-center text-slate-400 hover:text-slate-900 font-bold transition-colors group">
+                                <i data-lucide="arrow-left"
+                                    class="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform"></i>
+                                Back to Contact List
+                            </button>
+                        </div>
+
+                        <div
+                            class="bg-white rounded-[40px] shadow-sm border border-slate-100 p-10 overflow-hidden relative">
+                            <div class="absolute top-0 left-0 w-2 h-full bg-blue-600/10"></div>
+                            <h3 class="font-black text-3xl text-slate-900 mb-10 tracking-tight"
+                                x-text="contactForm.id ? 'Edit Contact' : 'New Contact'"></h3>
+
+                            <div class="grid grid-cols-1 gap-8">
+                                <div class="grid grid-cols-3 gap-8">
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Salutation</label>
+                                        <select x-model="contactForm.salutation"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                            <option>Mr.</option>
+                                            <option>Ms.</option>
+                                            <option>Mrs.</option>
+                                            <option>Dr.</option>
+                                            <option>Prof.</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">First
+                                            Name <span class="text-red-500">*</span></label>
+                                        <input type="text" x-model="contactForm.first_name"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Last
+                                            Name <span class="text-red-500">*</span></label>
+                                        <input type="text" x-model="contactForm.last_name"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-8">
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Account
+                                            Name</label>
+                                        <select x-model="contactForm.account_id"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                            <option value="">Select Account</option>
+                                            <template x-for="acc in masterData.accounts" :key="acc.id">
+                                                <option :value="acc.id" x-text="acc.name"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Title</label>
+                                        <input type="text" x-model="contactForm.title"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-8">
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Mobile</label>
+                                        <input type="number" x-model="contactForm.mobile"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Email</label>
+                                        <input type="email" x-model="contactForm.email"
+                                            class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                    </div>
+                                </div>
+
+                                <div class="pt-6 flex items-center space-x-4">
+                                    <button @click="saveContactForm()"
+                                        class="px-8 py-4 bg-green-600 text-white rounded-2xl font-black shadow-xl shadow-green-200 hover:bg-green-700 hover:-translate-y-0.5 transition-all flex items-center">
+                                        <i data-lucide="check" class="w-5 h-5 mr-2"></i>
+                                        Save Contact
+                                    </button>
+
+                                    <button x-show="contactForm.id" @click="deleteContact(contactForm.id)"
+                                        class="px-8 py-4 bg-white text-red-500 border-2 border-red-50 rounded-2xl font-black hover:bg-red-50 hover:border-red-100 transition-all flex items-center">
+                                        <i data-lucide="trash-2" class="w-5 h-5 mr-2"></i>
+                                        Delete Contact
+                                    </button>
+
+                                    <button @click="showContactForm = false"
+                                        class="text-slate-400 hover:text-slate-600 font-bold px-6 py-4 transition-colors">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table View (List) -->
+                    <div x-show="!showContactForm" x-transition:enter="transition ease-out duration-300"
+                        class="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-[11px] font-black uppercase text-slate-400 bg-slate-50/50">
+                                        <th class="py-6 px-10">Name</th>
+                                        <th class="py-6 px-10">Account</th>
+                                        <th class="py-6 px-10">Title</th>
+                                        <th class="py-6 px-10">Contact Info</th>
+                                        <th class="py-6 px-10 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm font-bold text-slate-700">
+                                    <template
+                                        x-for="(c, index) in masterData.contacts.filter(c => !contactSearch || (c.first_name + ' ' + c.last_name).toLowerCase().includes(contactSearch.toLowerCase()) || (c.email && c.email.toLowerCase().includes(contactSearch.toLowerCase())) || (c.account_name && c.account_name.toLowerCase().includes(contactSearch.toLowerCase())))"
+                                        :key="c.id">
+                                        <tr
+                                            class="border-b border-slate-50 hover:bg-blue-50/30 transition-colors group">
+                                            <td class="py-6 px-10">
+                                                <div class="font-black text-slate-900"
+                                                    x-text="c.salutation + ' ' + c.first_name + ' ' + c.last_name">
+                                                </div>
+                                            </td>
+                                            <td class="py-6 px-10">
+                                                <span class="text-slate-600" x-text="c.account_name || '-'"></span>
+                                            </td>
+                                            <td class="py-6 px-10">
+                                                <span class="text-slate-600" x-text="c.title || '-'"></span>
+                                            </td>
+                                            <td class="py-6 px-10">
+                                                <div class="text-xs font-black text-slate-900" x-text="c.email || '-'">
+                                                </div>
+                                                <div class="text-[10px] text-slate-400 font-medium"
+                                                    x-text="c.mobile || '-'"></div>
+                                            </td>
+                                            <td class="py-6 px-10 text-center">
+                                                <button @click="editContact(c)"
+                                                    class="p-3 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all">
+                                                    <i data-lucide="edit-3" class="w-5 h-5"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <template
+                                        x-if="masterData.contacts.filter(c => !contactSearch || (c.first_name + ' ' + c.last_name).toLowerCase().includes(contactSearch.toLowerCase()) || (c.email && c.email.toLowerCase().includes(contactSearch.toLowerCase())) || (c.account_name && c.account_name.toLowerCase().includes(contactSearch.toLowerCase()))).length === 0">
+                                        <tr>
+                                            <td colspan="5" class="py-20 text-center">
+                                                <div class="flex flex-col items-center justify-center text-slate-300">
+                                                    <i data-lucide="user-plus" class="w-16 h-16 mb-4 opacity-10"></i>
+                                                    <p class="text-slate-400 font-bold">No contacts found</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

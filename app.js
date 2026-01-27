@@ -57,6 +57,12 @@ function billApp() {
         showAccountManager: false,
         accountSearch: '',
         showAccountForm: false,
+
+        showContactManager: false,
+        contactSearch: '',
+        showContactForm: false,
+        contactForm: { id: null, salutation: 'Mr.', first_name: '', last_name: '', account_id: '', account_name: '', title: '', mobile: '', email: '' },
+
         showProductManager: false,
         productSearch: '',
         prodForm: {
@@ -228,6 +234,7 @@ function billApp() {
 
         masterData: {
             accounts: [],
+            contacts: [],
             products: []
         },
 
@@ -769,6 +776,92 @@ function billApp() {
             } else {
                 this.notify('Account deleted', 'success');
                 await this.loadAccounts();
+            }
+        },
+
+        // --- Contact Master Management ---
+        openContactManager() {
+            this.showContactManager = true;
+            this.showContactForm = false;
+            this.contactForm = { id: null, salutation: 'Mr.', first_name: '', last_name: '', account_id: '', account_name: '', title: '', mobile: '', email: '' };
+            this.loadContacts();
+            this.$nextTick(() => lucide.createIcons());
+        },
+
+        async loadContacts() {
+            const { data } = await window.supabase
+                .from('contacts')
+                .select('*, accounts(name)')
+                .order('first_name');
+            if (data) {
+                this.masterData.contacts = data.map(c => ({
+                    ...c,
+                    account_name: c.accounts?.name || ''
+                }));
+            }
+        },
+
+        resetContactForm() {
+            this.contactForm = { id: null, salutation: 'Mr.', first_name: '', last_name: '', account_id: '', account_name: '', title: '', mobile: '', email: '' };
+            this.showContactForm = true;
+            this.$nextTick(() => lucide.createIcons());
+        },
+
+        editContact(contact) {
+            this.contactForm = { ...contact };
+            this.showContactForm = true;
+            this.$nextTick(() => lucide.createIcons());
+        },
+
+        async saveContactForm() {
+            if (!this.contactForm.first_name || !this.contactForm.last_name) {
+                this.notify('First and Last Name are required', 'warning');
+                return;
+            }
+
+            const payload = {
+                salutation: this.contactForm.salutation,
+                first_name: this.contactForm.first_name,
+                last_name: this.contactForm.last_name,
+                account_id: this.contactForm.account_id || null,
+                title: this.contactForm.title,
+                mobile: this.contactForm.mobile,
+                email: this.contactForm.email
+            };
+
+            if (this.contactForm.id) {
+                payload.id = this.contactForm.id;
+            }
+
+            const { error } = await window.supabase
+                .from('contacts')
+                .upsert(payload);
+
+            if (error) {
+                console.error('Save Contact Error:', error);
+                this.notify('Failed to save contact: ' + error.message, 'error');
+                return;
+            }
+
+            this.notify('Contact saved successfully!', 'success');
+            this.showContactForm = false;
+            await this.loadContacts();
+            this.$nextTick(() => lucide.createIcons());
+        },
+
+        async deleteContact(id) {
+            if (!confirm('Are you sure you want to delete this contact?')) return;
+
+            const { error } = await window.supabase
+                .from('contacts')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                this.notify('Failed to delete: ' + error.message, 'error');
+            } else {
+                this.notify('Contact deleted', 'success');
+                await this.loadContacts();
             }
         },
 
