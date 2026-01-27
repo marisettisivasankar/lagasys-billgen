@@ -1144,6 +1144,7 @@ function billApp() {
         },
 
         bankChargesValue() {
+            if (this.doc.currency === 'INR') return 0;
             return Number(this.doc.bankChargesAmount || 0);
         },
 

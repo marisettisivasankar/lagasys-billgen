@@ -2312,7 +2312,7 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">Currency</label>
                                 <select x-model="doc.currency"
-                                    @change="lucide.createIcons(); if(doc.currency === 'INR') doc.exchangeRate = 1;"
+                                    @change="lucide.createIcons(); if(doc.currency === 'INR') { doc.exchangeRate = 1; doc.bankChargesAmount = 0; }"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                                     <template x-for="curr in currencies" :key="curr.code">
                                         <option :value="curr.code"
