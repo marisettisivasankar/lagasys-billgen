@@ -3,6 +3,10 @@ body {
     background-color: #f8fafc;
 }
 
+[x-cloak] {
+    display: none !important;
+}
+
 .heading-font {
     font-family: 'Poppins', sans-serif;
 }

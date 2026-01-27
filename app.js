@@ -12,7 +12,7 @@ function billApp() {
             annualRevenue: 0,
             outstanding: 0,
             collected: 0,
-            topCustomers: [],
+            topAccounts: [],
             conversion: { quotes: 0, invoices: 0, rate: 0 },
             docsByType: {},
             activeTab: 'Tax Invoice'
@@ -38,6 +38,9 @@ function billApp() {
         },
         savedDocs: [],
         showGstDashboard: false,
+        showGstHistoryDetail: false,
+        showDocViewer: false,
+        showProdForm: false,
         gstView: 'returns', // 'returns', 'calendar', 'reports'
         gstReturns: {
             gstr1: { status: 'Draft', period: '' },
@@ -51,11 +54,9 @@ function billApp() {
         lastGstr3bResult: null,
         selectedGstReturn: null,
         viewDoc: null,
-        showCustomerManager: false,
-        customerSearch: '',
-        viewDoc: null,
-        showCustomerManager: false,
-        customerSearch: '',
+        showAccountManager: false,
+        accountSearch: '',
+        showAccountForm: false,
         showProductManager: false,
         productSearch: '',
         prodForm: {
@@ -65,7 +66,7 @@ function billApp() {
             rate: 0,
             taxRate: 18
         },
-        custForm: {
+        accountForm: {
             id: null,
             name: '',
             address: '',
@@ -165,8 +166,8 @@ function billApp() {
             date: new Date().toISOString().split('T')[0],
             validityDate: '',
             paymentTerms: '100% Advance',
-            deliveryTime: '2-3 Working Days',
-            deliveryMode: 'Courier / By Hand',
+            deliveryTime: 'Within 7 Days',
+            deliveryMode: 'By Courier/Hand',
             subject: 'AERMOD View AMC for One Year',
             reference: 'To your email enquiry Dated 03rd April 2025',
             challanNo: '',
@@ -181,7 +182,7 @@ function billApp() {
             originalInvoiceNo: '',
             originalInvoiceDate: '',
             reasonForIssue: '',
-            customer: {
+            account: {
                 name: 'LaGa Systems Pvt Ltd',
                 address: 'Plot No 246, Road No 78, Jubilee Hills, Hyderabad - 500033',
                 gstin: '36AABCL2941H1ZN',
@@ -226,7 +227,7 @@ function billApp() {
         ],
 
         masterData: {
-            customers: [],
+            accounts: [],
             products: []
         },
 
@@ -241,7 +242,8 @@ function billApp() {
 
 
             lucide.createIcons();
-            this.showGstHistoryDetail = false; // Force close on load
+            this.showGstHistoryDetail = false;
+            this.showDocViewer = false;
             console.log('App Init: Checking Auth Session...');
 
             // Listen for Auth changes
@@ -266,7 +268,7 @@ function billApp() {
                 console.log('No active session found.');
             }
 
-            await this.loadCustomers();
+            await this.loadAccounts();
             await this.loadProducts();
             await this.loadGlobalBanks();
             await this.loadCurrentDoc();
@@ -474,8 +476,8 @@ function billApp() {
             this.doc.tnc.splice(index, 1);
         },
 
-        selectCustomerObj(c) {
-            this.doc.customer = { ...c };
+        selectAccountObj(c) {
+            this.doc.account = { ...c };
         },
 
         selectProductObj(index, p) {
@@ -499,6 +501,14 @@ function billApp() {
                             'The software is warranted for any design defects as per specification for 1 Year.',
                             'The above price doesn\'t include Installation and Training.'
                         ];
+
+            // Set specific defaults for Quotation
+            if (type === 'Quotation') {
+                this.doc.paymentTerms = '100% Advance';
+                this.doc.deliveryTime = 'Within 7 Days';
+                this.doc.deliveryMode = 'By Courier/Hand';
+            }
+
             this.doc.number = this.getPreviewNumber(type);
             await this.saveCurrentDoc();
         },
@@ -539,6 +549,14 @@ function billApp() {
             return `${startYear}-${endYear}`;
         },
 
+        getFYRange() {
+            const now = new Date();
+            const month = now.getMonth();
+            const year = now.getFullYear();
+            let startYear = month < 3 ? year - 1 : year;
+            return `Apr ${startYear} - Mar ${startYear + 1}`;
+        },
+
         getPreviewNumber(type) {
             const fy = this.getCurrentFY(this.doc.date);
             const prefix = this.getDocPrefix(type);
@@ -550,9 +568,9 @@ function billApp() {
         },
 
         async saveToMaster(type) {
-            if (type === 'customer') {
-                await this.saveCustomerToDB();
-                this.notify('Customer saved to database!', 'success');
+            if (type === 'account') {
+                await this.saveAccountToDB();
+                this.notify('Account saved to database!', 'success');
             }
             if (type === 'product') {
                 await this.saveProductsToDB();
@@ -560,22 +578,22 @@ function billApp() {
             }
         },
 
-        async saveCustomerToDB() {
-            await window.supabase.from('customers').upsert({
-                name: this.doc.customer.name,
-                address: this.doc.customer.address,
-                gstin: this.doc.customer.gstin,
-                state: this.doc.customer.state,
-                pan: this.doc.customer.pan
+        async saveAccountToDB() {
+            await window.supabase.from('accounts').upsert({
+                name: this.doc.account.name,
+                address: this.doc.account.address,
+                gstin: this.doc.account.gstin,
+                state: this.doc.account.state,
+                pan: this.doc.account.pan
             });
         },
 
-        async loadCustomers() {
+        async loadAccounts() {
             const { data } = await window.supabase
-                .from('customers')
+                .from('accounts')
                 .select('*')
                 .order('name');
-            if (data) this.masterData.customers = data;
+            if (data) this.masterData.accounts = data;
         },
 
         async saveProductsToDB() {
@@ -609,15 +627,21 @@ function billApp() {
         // --- Product Master Management ---
         openProductManager() {
             this.showProductManager = true;
-            this.resetProductForm();
+            this.showProdForm = false;
+            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
+            this.$nextTick(() => lucide.createIcons());
         },
 
         resetProductForm() {
             this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
+            this.showProdForm = true;
+            this.$nextTick(() => lucide.createIcons());
         },
 
         editProduct(product) {
             this.prodForm = { ...product };
+            this.showProdForm = true;
+            this.$nextTick(() => lucide.createIcons());
         },
 
         async saveProductForm() {
@@ -629,8 +653,8 @@ function billApp() {
             const payload = {
                 desc: this.prodForm.desc,
                 hsn: this.prodForm.hsn,
-                rate: this.prodForm.rate,
-                tax_rate: this.prodForm.taxRate
+                rate: parseFloat(this.prodForm.rate) || 0,
+                tax_rate: parseInt(this.prodForm.taxRate) || 18
             };
 
             if (this.prodForm.id) {
@@ -646,9 +670,15 @@ function billApp() {
                 return;
             }
 
-            this.notify('Product saved successfully!', 'success');
-            this.resetProductForm();
+            this.notify(this.prodForm.id ? 'Product updated successfully!' : 'Product added successfully!', 'success');
+            this.showProdForm = false;
+            this.resetProductFormManual(); // Helper to reset without toggling view
             await this.loadProducts();
+            this.$nextTick(() => lucide.createIcons());
+        },
+
+        resetProductFormManual() {
+            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
         },
 
         async deleteProduct(id) {
@@ -663,78 +693,82 @@ function billApp() {
                 this.notify('Failed to delete: ' + error.message, 'error');
             } else {
                 this.notify('Product deleted', 'success');
+                this.showProdForm = false;
                 await this.loadProducts();
             }
         },
 
-        // --- Customer Master Management ---
-        openCustomerManager() {
-            this.showCustomerManager = true;
-            this.resetCustomerForm();
+        // --- Account Master Management ---
+        openAccountManager() {
+            this.showAccountManager = true;
+            this.showAccountForm = false;
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+            this.$nextTick(() => lucide.createIcons());
         },
 
-        resetCustomerForm() {
-            this.custForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+        resetAccountForm() {
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+            this.showAccountForm = true;
+            this.$nextTick(() => lucide.createIcons());
         },
 
-        editCustomer(customer) {
-            this.custForm = { ...customer };
+        editAccount(account) {
+            this.accountForm = { ...account };
+            this.showAccountForm = true;
+            this.$nextTick(() => lucide.createIcons());
         },
 
-        async saveCustomerForm() {
-            if (!this.custForm.name) {
-                this.notify('Customer Name is required', 'warning');
+        async saveAccountForm() {
+            if (!this.accountForm.name) {
+                this.notify('Account Name is required', 'warning');
                 return;
             }
 
             const payload = {
-                name: this.custForm.name,
-                address: this.custForm.address,
-                gstin: this.custForm.gstin,
-                state: this.custForm.state,
-                pan: this.custForm.pan
+                name: this.accountForm.name,
+                address: this.accountForm.address,
+                gstin: this.accountForm.gstin,
+                state: this.accountForm.state,
+                pan: this.accountForm.pan
             };
 
-            if (this.custForm.id) {
-                payload.id = this.custForm.id;
+            if (this.accountForm.id) {
+                payload.id = this.accountForm.id;
             }
 
-            // Using upsert based on ID if present, else name might cause conflict if unique, 
-            // but assuming ID is the safe bet for updates.
-            // If ID is null, we want insert. If name conflict, we might want update or error.
-            // For now, let's rely on upsert. If we have UUIDs, upsert works well.
-            // If table uses serial ID, we shouldn't send ID on insert.
-
-            let query = window.supabase.from('customers');
-
-            // If we have an ID, we are likely updating precise record. 
-            // If not, we are inserting.
+            let query = window.supabase.from('accounts');
             const { error } = await query.upsert(payload);
 
             if (error) {
-                console.error('Save Customer Error:', error);
-                this.notify('Failed to save customer: ' + error.message, 'error');
+                console.error('Save Account Error:', error);
+                this.notify('Failed to save account: ' + error.message, 'error');
                 return;
             }
 
-            this.notify('Customer saved successfully!', 'success');
-            this.resetCustomerForm();
-            await this.loadCustomers(); // Reload list
+            this.notify('Account saved successfully!', 'success');
+            this.showAccountForm = false;
+            this.resetAccountFormManual();
+            await this.loadAccounts(); // Reload list
+            this.$nextTick(() => lucide.createIcons());
         },
 
-        async deleteCustomer(id) {
-            if (!confirm('Are you sure you want to delete this customer?')) return;
+        resetAccountFormManual() {
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+        },
+
+        async deleteAccount(id) {
+            if (!confirm('Are you sure you want to delete this account?')) return;
 
             const { error } = await window.supabase
-                .from('customers')
+                .from('accounts')
                 .delete()
                 .eq('id', id);
 
             if (error) {
                 this.notify('Failed to delete: ' + error.message, 'error');
             } else {
-                this.notify('Customer deleted', 'success');
-                await this.loadCustomers();
+                this.notify('Account deleted', 'success');
+                await this.loadAccounts();
             }
         },
 
@@ -812,7 +846,7 @@ function billApp() {
                 revision: this.doc.revision || 0,
                 date: this.doc.date,
                 currency: this.doc.currency,
-                customer: this.doc.customer,
+                account: this.doc.account,
                 items: this.doc.items,
                 banks: this.doc.banks,
                 totals: {
@@ -930,7 +964,7 @@ function billApp() {
                 this.doc.originalInvoiceNo = '';
                 this.doc.originalInvoiceDate = '';
                 this.doc.reasonForIssue = '';
-                this.doc.customer = { name: '', address: '', gstin: '', state: '', pan: '' };
+                this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '' };
                 this.doc.taxRate = 18;
                 this.doc.items = [{ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18 }];
                 this.doc.tnc = (this.doc.type === 'Delivery Challan')
@@ -1158,7 +1192,7 @@ function billApp() {
                     revision: this.doc.revision || 0,
                     date: this.doc.date,
                     currency: this.doc.currency,
-                    customer: this.doc.customer,
+                    account: this.doc.account,
                     items: this.doc.items,
                     banks: this.doc.banks,
                     totals: {
@@ -1207,7 +1241,7 @@ function billApp() {
 
         async resetDraftOnly() {
             this.doc.number = '';
-            this.doc.customer = { name: '', address: '', gstin: '', state: '', pan: '' };
+            this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '' };
             this.doc.items = [{ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18 }];
             this.doc.subject = '';
             this.doc.reference = '';
@@ -1286,14 +1320,14 @@ function billApp() {
         },
 
         openEmailClient() {
-            const customerName = this.doc.customer.name || 'Customer';
+            const accountName = this.doc.account.name || 'Account';
             const number = this.doc.number || 'Draft';
             const type = this.doc.type;
             const subject = `${type} #${number} from LaGa Systems Pvt Ltd`;
             const total = this.grandTotal();
             const amountStr = this.formatCurrency(total);
             const body =
-                `Dear ${customerName},\n\n` +
+                `Dear ${accountName},\n\n` +
                 `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
                 `Kindly review and process at your earliest convenience.\n\n` +
                 `Regards,\n` +
@@ -1304,7 +1338,7 @@ function billApp() {
         },
 
         async copyEmailDraft() {
-            const customerName = this.doc.customer.name || 'Customer';
+            const accountName = this.doc.account.name || 'Account';
             const number = this.doc.number || 'Draft';
             const type = this.doc.type;
             const subject = `${type} #${number} from LaGa Systems Pvt Ltd`;
@@ -1312,7 +1346,7 @@ function billApp() {
             const amountStr = this.formatCurrency(total);
             const body =
                 `Subject: ${subject}\n\n` +
-                `Dear ${customerName},\n\n` +
+                `Dear ${accountName},\n\n` +
                 `Please find attached the ${type} #${number} dated ${this.doc.date} for ${this.getCurrencySymbol()}${amountStr}.\n\n` +
                 `Kindly review and process at your earliest convenience.\n\n` +
                 `Regards,\n` +
@@ -1356,8 +1390,8 @@ function billApp() {
             return gstin.substring(0, 2);
         },
 
-        isB2B(customer) {
-            return customer && customer.gstin && customer.gstin.length === 15;
+        isB2B(account) {
+            return account && account.gstin && account.gstin.length === 15;
         },
 
         calculateGstDueDate(type, month, year, frequency) {
@@ -1386,7 +1420,7 @@ function billApp() {
             let totalGst = 0;
 
             docs.forEach(doc => {
-                const isB2B = this.isB2B(doc.customer);
+                const isB2B = this.isB2B(doc.account);
                 if (isB2B) b2bCount++; else b2cCount++;
 
                 const docStats = this.getDocTotals(doc);
@@ -1421,7 +1455,7 @@ function billApp() {
                 annualRevenue: 0,
                 outstanding: 0,
                 collected: 0,
-                topCustomers: [],
+                topAccounts: [],
                 activeTab: currentTab,
                 conversion: {
                     quotes: 0,
@@ -1432,13 +1466,14 @@ function billApp() {
                     'Quotation': [],
                     'Proforma Invoice': [],
                     'Tax Invoice': [],
+                    'Purchase Invoice': [],
                     'Delivery Challan': [],
                     'Credit Note': [],
                     'Debit Note': []
                 }
             };
 
-            const customerMap = {};
+            const accountMap = {};
 
             this.savedDocs.forEach(doc => {
                 const docDate = new Date(doc.date);
@@ -1467,10 +1502,10 @@ function billApp() {
                         newStats.collected += totals.total * multiplier * exRate;
                     }
 
-                    // Top Customers
-                    const cName = doc.customer.name || 'Unknown';
-                    if (!customerMap[cName]) customerMap[cName] = 0;
-                    customerMap[cName] += totals.subtotal * multiplier;
+                    // Top Accounts
+                    const cName = doc.account.name || 'Unknown';
+                    if (!accountMap[cName]) accountMap[cName] = 0;
+                    accountMap[cName] += totals.subtotal * multiplier; // Keep as is for logic if needed, but rename variable if possible
                 }
 
                 if (doc.type === 'Quotation') newStats.conversion.quotes++;
@@ -1495,7 +1530,7 @@ function billApp() {
                 newStats.docsByType[doc.type].push({
                     id: doc.id,
                     number: doc.number,
-                    customer: doc.customer.name || 'Unknown',
+                    account: doc.account.name || 'Unknown',
                     date: doc.date,
                     total: totals.total,
                     status: displayStatus,
@@ -1503,8 +1538,8 @@ function billApp() {
                 });
             });
 
-            // Format Top Customers
-            newStats.topCustomers = Object.entries(customerMap)
+            // Format Top Accounts
+            newStats.topAccounts = Object.entries(accountMap)
                 .map(([name, value]) => ({ name, value }))
                 .sort((a, b) => b.value - a.value)
                 .slice(0, 5);
@@ -1539,7 +1574,7 @@ function billApp() {
                 this.viewDoc = JSON.parse(JSON.stringify(doc));
 
                 // Calculate Tax Breakdown
-                const state = (this.viewDoc.customer.state || '').toLowerCase();
+                const state = (this.viewDoc.account.state || '').toLowerCase();
                 const isInterstate = !state.includes('telangana');
                 const totalTax = this.viewDoc.totals?.tax || 0;
 
@@ -1596,7 +1631,7 @@ function billApp() {
                 const searchLower = this.ledgerControls.search.toLowerCase();
                 const matchesSearch = !this.ledgerControls.search ||
                     doc.number.toLowerCase().includes(searchLower) ||
-                    doc.customer.toLowerCase().includes(searchLower) ||
+                    doc.account.toLowerCase().includes(searchLower) ||
                     doc.total.toString().includes(searchLower);
 
                 // Date Range Filter
@@ -1616,7 +1651,7 @@ function billApp() {
             const data = this.getFilteredDocs(type).map(doc => ({
                 'Date': doc.date,
                 'Document No': doc.number,
-                'Customer': doc.customer,
+                'Account': doc.account,
                 'Status': doc.status,
                 'Amount': doc.total
             }));
@@ -1645,8 +1680,8 @@ function billApp() {
 
             docs.forEach(doc => {
                 const multiplier = doc.type === 'Credit Note' ? -1 : 1;
-                const isB2B = this.isB2B(doc.customer);
-                const pos = isB2B ? doc.customer.gstin.substring(0, 2) : (this.getGstStateCode(doc.customer.gstin) || this.doc.company.gstin.substring(0, 2));
+                const isB2B = this.isB2B(doc.account);
+                const pos = isB2B ? doc.account.gstin.substring(0, 2) : (this.getGstStateCode(doc.account.gstin) || this.doc.company.gstin.substring(0, 2));
 
                 if (isB2B) {
                     // Group invoice items by rate for B2B
@@ -1657,7 +1692,7 @@ function billApp() {
                         const txval = (item.qty * item.rate) * multiplier;
                         const tax = txval * (r / 100);
                         rateGroups[r].txval += txval;
-                        if (this.isIGST(doc.customer.gstin)) rateGroups[r].iamt += tax;
+                        if (this.isIGST(doc.account.gstin)) rateGroups[r].iamt += tax;
                         else {
                             rateGroups[r].camt += tax / 2;
                             rateGroups[r].samt += tax / 2;
@@ -1670,8 +1705,8 @@ function billApp() {
                         date: doc.date,
                         poNumber: doc.poNumber || '',
                         poDate: doc.poDate || '',
-                        name: doc.customer.name,
-                        gstin: doc.customer.gstin,
+                        name: doc.account.name,
+                        gstin: doc.account.gstin,
                         pos: pos,
                         itms: Object.values(rateGroups),
                         taxable: docStats.subtotal * multiplier,
@@ -1700,7 +1735,7 @@ function billApp() {
 
         exportGstr1Details() {
             const data = this.getGstr1Details();
-            let csv = "Type,Invoice No,Date,Customer PO No,Customer PO Date,Customer Name,GSTIN,Taxable Value,GST Total\n";
+            let csv = "Type,Invoice No,Date,Account PO No,Account PO Date,Account Name,GSTIN,Taxable Value,GST Total\n";
 
             data.b2b.forEach(item => {
                 csv += `B2B,${item.number},${item.date},${item.poNumber},${item.poDate},"${item.name}",${item.gstin},${item.taxable},${item.gst}\n`;
@@ -1854,10 +1889,10 @@ function billApp() {
                     b2bData.push({
                         "Invoice Number": inv.number,
                         "Invoice Date": inv.date,
-                        "Customer PO No": inv.poNumber || '',
-                        "Customer PO Date": inv.poDate || '',
-                        "Customer Name": inv.name,
-                        "Customer GSTIN": inv.gstin,
+                        "Account PO No": inv.poNumber || '',
+                        "Account PO Date": inv.poDate || '',
+                        "Account Name": inv.name,
+                        "Account GSTIN": inv.gstin,
                         "Place of Supply": inv.pos,
                         "Rate": itm.rt,
                         "Taxable Value": itm.txval,
@@ -1937,7 +1972,7 @@ function billApp() {
             docs.forEach(doc => {
                 const isCreditNote = doc.type === 'Credit Note';
                 const multiplier = isCreditNote ? -1 : 1;
-                const isIGST = this.isIGST(doc.customer.gstin);
+                const isIGST = this.isIGST(doc.account.gstin);
 
                 doc.items.forEach(item => {
                     if (!item.hsn) return;
@@ -1964,7 +1999,7 @@ function billApp() {
 
         isIGST(doc) {
             // If it's a doc object (for dashboard/history)
-            const targetGstin = doc?.customer?.gstin || doc;
+            const targetGstin = doc?.account?.gstin || doc;
             const isForeign = doc?.currency && doc.currency !== 'INR';
             if (isForeign) return true; // Exports are treated as IGST (Inter-state)
             if (!targetGstin || !this.doc.company.gstin) return false;
@@ -2116,8 +2151,8 @@ function billApp() {
 
             docs.forEach(doc => {
                 const multiplier = doc.type === 'Credit Note' ? -1 : 1;
-                const isB2B = doc.customer && doc.customer.gstin;
-                const pos = isB2B ? doc.customer.gstin.substring(0, 2) : (this.getGstStateCode(doc.customer.gstin) || this.doc.company.gstin.substring(0, 2));
+                const isB2B = doc.account && doc.account.gstin;
+                const pos = isB2B ? doc.account.gstin.substring(0, 2) : (this.getGstStateCode(doc.account.gstin) || this.doc.company.gstin.substring(0, 2));
 
                 const totals = this.getDocTotals(doc);
 
@@ -2138,7 +2173,7 @@ function billApp() {
                     hsnMap[hsnKey].qty += (item.qty * multiplier);
                     hsnMap[hsnKey].txval += itemTxval;
 
-                    if (isB2B && this.isIGST(doc.customer.gstin)) {
+                    if (isB2B && this.isIGST(doc.account.gstin)) {
                         hsnMap[hsnKey].iamt += itemTax;
                     } else if (isB2B) {
                         hsnMap[hsnKey].camt += itemTax / 2;
@@ -2177,8 +2212,8 @@ function billApp() {
                         date: doc.date,
                         poNumber: doc.poNumber || '',
                         poDate: doc.poDate || '',
-                        gstin: doc.customer.gstin,
-                        name: doc.customer.name,
+                        gstin: doc.account.gstin,
+                        name: doc.account.name,
                         taxable: (totals.subtotal * multiplier) * (doc.exchangeRate || 1),
                         gst: (totals.tax * multiplier) * (doc.exchangeRate || 1),
                         iamt: itms.reduce((s, i) => s + i.iamt, 0),
@@ -2280,9 +2315,9 @@ function billApp() {
             if (totalReturns === 0) return;
 
             // Simplified calculation for demonstration
-            const validGstins = this.masterData.customers.filter(c => this.isValidGstin(c.gstin)).length;
-            const totalCustomers = this.masterData.customers.length || 1;
-            this.complianceStats.dataIntegrity = Math.round((validGstins / totalCustomers) * 100);
+            const validGstins = this.masterData.accounts.filter(c => this.isValidGstin(c.gstin)).length;
+            const totalAccounts = this.masterData.accounts.length || 1;
+            this.complianceStats.dataIntegrity = Math.round((validGstins / totalAccounts) * 100);
 
             // Score based on integrity and simulated punctuality
             this.complianceStats.score = Math.round((this.complianceStats.dataIntegrity + this.complianceStats.punctuality + this.complianceStats.itcEfficiency) / 3);
@@ -2474,24 +2509,34 @@ function billApp() {
             let csvContent = '';
             const filename = `${returnType}_${period}.csv`;
 
+            // Helper for Indian Currency Formatting in CSV
+            const f = (val) => {
+                const num = Number(val) || 0;
+                const formatted = num.toLocaleString('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+                return `"${formatted}"`;
+            };
+
             if (returnType === 'GSTR-1') {
                 csvContent = 'GSTR-1 Summary\n\n';
                 csvContent += `Period,${period}\n`;
                 csvContent += `Total Invoices,${data.invoiceCount}\n`;
-                csvContent += `Total Taxable Value,${data.totalTaxable}\n`;
-                csvContent += `Total GST,${data.totalGst}\n\n`;
+                csvContent += `Total Taxable Value,${f(data.totalTaxable)}\n`;
+                csvContent += `Total GST,${f(data.totalGst)}\n\n`;
 
                 csvContent += 'B2B Invoices\n';
-                csvContent += 'Invoice No,Date,Customer PO No,Customer PO Date,GSTIN,Customer Name,Taxable Value,IGST,CGST,SGST,Total GST\n';
+                csvContent += 'Invoice No,Date,Account PO No,Account PO Date,GSTIN,Account Name,Taxable Value,IGST,CGST,SGST,Total GST\n';
                 data.b2b.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${inv.taxable},${inv.iamt || 0},${inv.camt || 0},${inv.samt || 0},${inv.gst}\n`;
+                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${f(inv.taxable)},${f(inv.iamt || 0)},${f(inv.camt || 0)},${f(inv.samt || 0)},${f(inv.gst)}\n`;
                 });
 
                 csvContent += '\nSection 7 - B2C (Others) Aggregated\n';
                 csvContent += 'Place of Supply,Rate,Taxable Value,IGST,CGST,SGST,Total GST\n';
                 data.b2c.forEach(row => {
                     const totalGst = (row.iamt || 0) + (row.camt || 0) + (row.samt || 0);
-                    csvContent += `${row.pos},${row.rt}%,${row.txval},${row.iamt},${row.camt},${row.samt},${totalGst}\n`;
+                    csvContent += `${row.pos},${row.rt}%,${f(row.txval)},${f(row.iamt)},${f(row.camt)},${f(row.samt)},${f(totalGst)}\n`;
                 });
 
                 if (data.hsnSummary) {
@@ -2499,42 +2544,42 @@ function billApp() {
                     csvContent += 'HSN/SAC,Description,UQC,Quantity,Taxable Value,IGST,CGST,SGST,Total GST\n';
                     data.hsnSummary.forEach(h => {
                         const totalGst = (h.iamt || 0) + (h.camt || 0) + (h.samt || 0);
-                        csvContent += `${h.hsn},Service/Product,${h.uqc},${h.qty},${h.txval},${h.iamt},${h.camt},${h.samt},${totalGst}\n`;
+                        csvContent += `${h.hsn},Service/Product,${h.uqc},${h.qty},${f(h.txval)},${f(h.iamt)},${f(h.camt)},${f(h.samt)},${f(totalGst)}\n`;
                     });
                 }
             } else if (returnType === 'GSTR-3B') {
                 csvContent = 'GSTR-3B Summary\n\n';
                 csvContent += `Period,${period}\n`;
-                csvContent += `Taxable Value,${data.outwardSupplies.taxableValue}\n`;
-                csvContent += `IGST,${data.outwardSupplies.igst}\n`;
-                csvContent += `CGST,${data.outwardSupplies.cgst}\n`;
-                csvContent += `SGST,${data.outwardSupplies.sgst}\n`;
-                csvContent += `Net Tax Liability,${data.netTaxLiability}\n`;
+                csvContent += `Taxable Value,${f(data.outwardSupplies.taxableValue)}\n`;
+                csvContent += `IGST,${f(data.outwardSupplies.igst)}\n`;
+                csvContent += `CGST,${f(data.outwardSupplies.cgst)}\n`;
+                csvContent += `SGST,${f(data.outwardSupplies.sgst)}\n`;
+                csvContent += `Net Tax Liability,${f(data.netTaxLiability)}\n`;
             } else if (returnType === 'CMP-08') {
                 csvContent = 'CMP-08 Summary\n\n';
                 csvContent += `Period,${period}\n`;
-                csvContent += `Turnover,${data.turnover}\n`;
+                csvContent += `Turnover,${f(data.turnover)}\n`;
                 csvContent += `Tax Rate,${data.taxRate}%\n`;
-                csvContent += `Tax Payable,${data.taxPayable}\n`;
+                csvContent += `Tax Payable,${f(data.taxPayable)}\n`;
             } else if (returnType === 'GSTR-9') {
                 csvContent = 'GSTR-9 Annual Summary\n\n';
                 csvContent += `Financial Year,${period}\n`;
-                csvContent += `Annual Turnover,${data.annualTurnover}\n`;
-                csvContent += `Annual GST,${data.annualGst}\n`;
+                csvContent += `Annual Turnover,${f(data.annualTurnover)}\n`;
+                csvContent += `Annual GST,${f(data.annualGst)}\n`;
                 csvContent += `Total Invoices,${data.invoiceCount}\n`;
                 csvContent += `B2B Count,${data.b2bCount}\n`;
                 csvContent += `B2C Count,${data.b2cCount}\n\n`;
 
                 csvContent += 'Table 4 - Outward Supplies on which tax is payable\n';
                 csvContent += 'Nature of Supply,Taxable Value,IGST,CGST,SGST\n';
-                csvContent += `B2B,${data.table4.b2b.txval},${data.table4.b2b.iamt},${data.table4.b2b.camt},${data.table4.b2b.samt}\n`;
-                csvContent += `B2C,${data.table4.b2c.txval},${data.table4.b2c.iamt},${data.table4.b2c.camt},${data.table4.b2c.samt}\n\n`;
+                csvContent += `B2B,${f(data.table4.b2b.txval)},${f(data.table4.b2b.iamt)},${f(data.table4.b2b.camt)},${f(data.table4.b2b.samt)}\n`;
+                csvContent += `B2C,${f(data.table4.b2c.txval)},${f(data.table4.b2c.iamt)},${f(data.table4.b2c.camt)},${f(data.table4.b2c.samt)}\n\n`;
 
                 if (data.table17) {
                     csvContent += 'Table 17 - HSN Summary\n';
                     csvContent += 'HSN/SAC,UQC,Quantity,Taxable Value,IGST,CGST,SGST\n';
                     data.table17.forEach(h => {
-                        csvContent += `${h.hsn},${h.uqc},${h.qty},${h.txval},${h.iamt},${h.camt},${h.samt}\n`;
+                        csvContent += `${h.hsn},${h.uqc},${h.qty},${f(h.txval)},${f(h.iamt)},${f(h.camt)},${f(h.samt)}\n`;
                     });
                 }
             }
