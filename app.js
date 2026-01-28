@@ -7,6 +7,8 @@ function billApp() {
         showSettings: false,
         showDashboard: false,
         showLedger: false,
+        selectedFY: '',
+        availableFYs: [],
         dashboardStats: {
             monthlyRevenue: 0,
             annualRevenue: 0,
@@ -15,7 +17,14 @@ function billApp() {
             topAccounts: [],
             conversion: { quotes: 0, invoices: 0, rate: 0 },
             docsByType: {},
-            activeTab: 'Tax Invoice'
+            activeTab: 'Tax Invoice',
+            monthWiseTrend: [],
+            taxSummary: { domestic: 0, export: 0, totalGst: 0, taxableDomestic: 0, taxableExport: 0 },
+            topProducts: [],
+            domesticExportSplit: { domesticCount: 0, exportCount: 0 }
+        },
+        openingBalance: {
+            outstanding: 0
         },
         toasts: [],
         notify(message, type = 'info', duration = 3000) {
@@ -177,6 +186,12 @@ function billApp() {
             exchangeRate: 1,
             supplyType: 'DOMESTIC_B2C', // 'EXPORT_LUT', 'DOMESTIC_B2B', 'DOMESTIC_B2C'
             isPosted: false,
+            // Purchase Invoice Specifics
+            boeNumber: '',
+            boeDate: '',
+            portCode: '',
+            isRcm: false,
+            itcEligibility: 'Inputs', // 'Inputs', 'Input Services', 'Capital Goods', 'Ineligible'
             date: new Date().toISOString().split('T')[0],
             validityDate: '',
             paymentTerms: '100% Advance',
@@ -271,6 +286,7 @@ function billApp() {
             await this.loadHistory();
             await this.loadGstReturns();
             await this.loadGstFilings();
+            await this.loadOpeningBalance();
 
             if (!this.doc.number) {
                 this.doc.number = this.getPreviewNumber(this.doc.type);
@@ -285,6 +301,41 @@ function billApp() {
             this.$watch('doc', () => {
                 this.saveCurrentDoc();
             }, { deep: true });
+
+            this.generateFYList();
+        },
+
+        async loadOpeningBalance() {
+            if (!this.user || !this.selectedFY) return;
+            const { data, error } = await window.supabase
+                .from('opening_balances')
+                .select('outstanding')
+                .eq('user_id', this.user.id)
+                .eq('fy', this.selectedFY)
+                .single();
+            if (data) {
+                this.openingBalance.outstanding = data.outstanding;
+            } else {
+                this.openingBalance.outstanding = 0;
+            }
+        },
+
+        async saveOpeningBalance() {
+            if (!this.user || !this.selectedFY) return;
+            const { error } = await window.supabase
+                .from('opening_balances')
+                .upsert({
+                    user_id: this.user.id,
+                    fy: this.selectedFY,
+                    outstanding: parseFloat(this.openingBalance.outstanding || 0),
+                    updated_at: new Date().toISOString()
+                });
+            if (error) {
+                this.notify('Failed to save opening balance: ' + error.message, 'error');
+            } else {
+                this.notify('Opening balance saved', 'success');
+                this.updateExecutiveStats();
+            }
         },
 
         // --- Auth Methods ---
@@ -521,6 +572,12 @@ function billApp() {
                 this.doc.deliveryMode = 'By Courier/Hand';
             }
 
+            // Set specific defaults for Purchase Invoice
+            if (type === 'Purchase Invoice') {
+                this.doc.itcEligibility = 'Inputs';
+                this.doc.isRcm = false;
+            }
+
             this.doc.number = this.getPreviewNumber(type);
             await this.saveCurrentDoc();
         },
@@ -532,6 +589,7 @@ function billApp() {
             if (type === 'Delivery Challan') return 'LGS-DC';
             if (type === 'Credit Note') return 'LGS-CN';
             if (type === 'Debit Note') return 'LGS-DN';
+            if (type === 'Purchase Invoice') return 'LGS-PUR';
             return 'LGS-DOC';
         },
 
@@ -542,6 +600,7 @@ function billApp() {
             if (type === 'Delivery Challan') return 'DC';
             if (type === 'Credit Note') return 'CN';
             if (type === 'Debit Note') return 'DN';
+            if (type === 'Purchase Invoice') return 'PUR';
             return 'DOC';
         },
 
@@ -559,6 +618,32 @@ function billApp() {
                 endYear = year.toString().slice(-2);
             }
             return `${startYear}-${endYear}`;
+        },
+
+        generateFYList() {
+            const years = new Set();
+
+            // 1. Add years from transaction data
+            this.savedDocs.forEach(doc => {
+                if (doc.date) years.add(this.getCurrentFY(doc.date));
+            });
+
+            // 2. Add a default range (Current FY + 2 previous FYs)
+            const currentFY = this.getCurrentFY();
+            years.add(currentFY);
+
+            const [startYearStr] = currentFY.split('-');
+            const startYear = parseInt(startYearStr);
+            years.add(`${startYear - 1}-${startYear.toString().slice(-2)}`);
+            years.add(`${startYear - 2}-${(startYear - 1).toString().slice(-2)}`);
+
+            this.availableFYs = Array.from(years).sort((a, b) => b.localeCompare(a));
+            if (!this.selectedFY) this.selectedFY = currentFY;
+        },
+
+        setSelectedFY(fy) {
+            this.selectedFY = fy;
+            this.updateExecutiveStats();
         },
 
         getFYRange() {
@@ -950,6 +1035,7 @@ function billApp() {
                 .order('created_at', { ascending: false });
             if (!error) {
                 this.savedDocs = data;
+                this.generateFYList();
                 this.updateExecutiveStats();
             }
         },
@@ -1073,7 +1159,13 @@ function billApp() {
         },
 
         itemTaxAmount(item, docType) {
-            if (this.doc.supplyType === 'EXPORT_LUT' && this.doc.currency !== 'INR') return 0;
+            const isPurchase = (docType || this.doc.type) === 'Purchase Invoice';
+            const isExportLUT = this.doc.supplyType === 'EXPORT_LUT' && this.doc.currency !== 'INR';
+
+            // For exports under LUT, tax is 0. 
+            // For imports, tax (IGST) is usually paid at customs even if vendor is foreign.
+            if (!isPurchase && isExportLUT) return 0;
+
             const currentType = docType || this.doc.type;
             const ratePercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
             return this.itemTaxableValue(item, currentType) * (ratePercent / 100);
@@ -1158,14 +1250,18 @@ function billApp() {
 
         updateSupplyType() {
             const acc = this.doc.account;
+            const isPurchase = this.doc.type === 'Purchase Invoice';
+
             if (acc.country && acc.country !== 'India') {
-                this.doc.supplyType = 'EXPORT_LUT';
-                // Automatically set tax rate to 0 for exports
-                this.doc.items.forEach(item => item.taxRate = 0);
+                this.doc.supplyType = isPurchase ? 'IMPORT_GOODS' : 'EXPORT_LUT';
+                // Automatically set tax rate to 0 for exports (but for imports, IGST is often paid)
+                if (!isPurchase) {
+                    this.doc.items.forEach(item => item.taxRate = 0);
+                }
             } else if (acc.gstin && acc.gstin.trim() !== '') {
-                this.doc.supplyType = 'DOMESTIC_B2B';
+                this.doc.supplyType = isPurchase ? 'PURCHASE_B2B' : 'DOMESTIC_B2B';
             } else {
-                this.doc.supplyType = 'DOMESTIC_B2C';
+                this.doc.supplyType = isPurchase ? 'PURCHASE_B2C' : 'DOMESTIC_B2C';
             }
         },
 
@@ -1330,6 +1426,11 @@ function billApp() {
                     },
                     poNumber: this.doc.poNumber || '',
                     poDate: this.doc.poDate || '',
+                    boeNumber: this.doc.boeNumber || '',
+                    boeDate: this.doc.boeDate || '',
+                    portCode: this.doc.portCode || '',
+                    isRcm: !!this.doc.isRcm,
+                    itcEligibility: this.doc.itcEligibility || 'Inputs',
                     tnc: this.doc.tnc,
                     settings: this.doc.settings,
                     status: 'FINAL',
@@ -1383,6 +1484,11 @@ function billApp() {
             this.doc.poNumber = '';
             this.doc.poDate = '';
             this.doc.dueDate = '';
+            this.doc.boeNumber = '';
+            this.doc.boeDate = '';
+            this.doc.portCode = '';
+            this.doc.isRcm = false;
+            this.doc.itcEligibility = 'Inputs';
             this.doc.originalInvoiceNo = '';
             this.doc.originalInvoiceDate = '';
             this.doc.reasonForIssue = '';
@@ -1547,11 +1653,22 @@ function billApp() {
         },
 
         getGstDashboardStats() {
-            const docs = this.savedDocs.filter(d =>
-                d.type === 'Tax Invoice' ||
-                d.type === 'Credit Note' ||
-                d.type === 'Debit Note'
-            );
+            if (!this.selectedFY) return { b2bCount: 0, b2cCount: 0, totalTaxable: 0, totalGst: 0 };
+
+            const [startYearStr] = this.selectedFY.split('-');
+            const startYear = parseInt(startYearStr);
+            const fyStartDate = new Date(startYear, 3, 1); // April 1st
+            const fyEndDate = new Date(startYear + 1, 2, 31, 23, 59, 59); // March 31st
+
+            const docs = this.savedDocs.filter(d => {
+                const docDate = new Date(d.date);
+                return (
+                    (d.type === 'Tax Invoice' ||
+                        d.type === 'Credit Note' ||
+                        d.type === 'Debit Note') &&
+                    docDate >= fyStartDate && docDate <= fyEndDate
+                );
+            });
 
             let b2bCount = 0;
             let b2cCount = 0;
@@ -1580,12 +1697,16 @@ function billApp() {
         },
 
         updateExecutiveStats() {
+            if (!this.selectedFY) return;
+
+            const [startYearStr] = this.selectedFY.split('-');
+            const startYear = parseInt(startYearStr);
+            const fyStartDate = new Date(startYear, 3, 1); // April 1st
+            const fyEndDate = new Date(startYear + 1, 2, 31, 23, 59, 59); // March 31st
+
             const now = new Date();
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
-
-            // FY Calculation (April to March)
-            let fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
 
             const currentTab = this.dashboardStats ? this.dashboardStats.activeTab : 'Quotation';
 
@@ -1596,72 +1717,95 @@ function billApp() {
                 collected: 0,
                 topAccounts: [],
                 activeTab: currentTab,
-                conversion: {
-                    quotes: 0,
-                    invoices: 0,
-                    rate: 0
-                },
+                conversion: { quotes: 0, invoices: 0, rate: 0 },
                 docsByType: {
-                    'Quotation': [],
-                    'Proforma Invoice': [],
-                    'Tax Invoice': [],
-                    'Purchase Invoice': [],
-                    'Delivery Challan': [],
-                    'Credit Note': [],
-                    'Debit Note': []
-                }
+                    'Quotation': [], 'Proforma Invoice': [], 'Tax Invoice': [],
+                    'Purchase Invoice': [], 'Delivery Challan': [], 'Credit Note': [], 'Debit Note': []
+                },
+                monthWiseTrend: [
+                    { month: 'Apr', value: 0 }, { month: 'May', value: 0 }, { month: 'Jun', value: 0 },
+                    { month: 'Jul', value: 0 }, { month: 'Aug', value: 0 }, { month: 'Sep', value: 0 },
+                    { month: 'Oct', value: 0 }, { month: 'Nov', value: 0 }, { month: 'Dec', value: 0 },
+                    { month: 'Jan', value: 0 }, { month: 'Feb', value: 0 }, { month: 'Mar', value: 0 }
+                ],
+                taxSummary: { domestic: 0, export: 0, totalGst: 0, taxableDomestic: 0, taxableExport: 0 },
+                topProducts: [],
+                domesticExportSplit: { domesticCount: 0, exportCount: 0 }
             };
 
             const accountMap = {};
+            const productMap = {};
 
             this.savedDocs.forEach(doc => {
                 const docDate = new Date(doc.date);
+
+                // Grouping by type (always show current type) - Actually filtered by FY below? 
+                // UX Requirement: "filter all sales-related data strictly between the FY start and end dates"
+                if (docDate < fyStartDate || docDate > fyEndDate) return;
+
                 const totals = this.getDocTotals(doc);
                 const isInvoice = (doc.type === 'Tax Invoice' || doc.type === 'Debit Note');
                 const isCreditNote = (doc.type === 'Credit Note');
                 const multiplier = isCreditNote ? -1 : 1;
+                const exRate = doc.exchangeRate || 1;
 
                 if (isInvoice || isCreditNote) {
-                    const exRate = doc.exchangeRate || 1;
-                    // Revenue (Month) - Matches Month AND Year
+                    const taxableVal = totals.subtotal * multiplier * exRate;
+                    const totalVal = totals.total * multiplier * exRate;
+                    const gstVal = totals.tax * multiplier * exRate;
+
+                    newStats.annualRevenue += taxableVal;
+
                     if (docDate.getMonth() === currentMonth && docDate.getFullYear() === currentYear) {
-                        newStats.monthlyRevenue += totals.subtotal * multiplier * exRate;
+                        newStats.monthlyRevenue += taxableVal;
                     }
 
-                    // Revenue (Annual FY) - Starts April 1st
-                    const fyStartDate = new Date(fyStartYear, 3, 1);
-                    if (docDate >= fyStartDate) {
-                        newStats.annualRevenue += totals.subtotal * multiplier * exRate;
-                    }
-
-                    // Payment Metrics
                     if (doc.status !== 'PAID') {
-                        newStats.outstanding += totals.total * multiplier * exRate;
+                        newStats.outstanding += totalVal;
                     } else {
-                        newStats.collected += totals.total * multiplier * exRate;
+                        newStats.collected += totalVal;
+                    }
+
+                    // Month-wise Trend
+                    const monthIdx = docDate.getMonth();
+                    // Map Jan(0) to index 9, Apr(3) to index 0
+                    const trendIdx = (monthIdx >= 3) ? (monthIdx - 3) : (monthIdx + 9);
+                    newStats.monthWiseTrend[trendIdx].value += taxableVal;
+
+                    // Tax Summary & Sales Split
+                    const isExport = doc.supplyType === 'EXPORT_LUT' || (doc.account.country && doc.account.country !== 'India');
+                    if (isExport) {
+                        newStats.taxSummary.taxableExport += taxableVal;
+                        newStats.taxSummary.export += totalVal;
+                        newStats.domesticExportSplit.exportCount++;
+                    } else {
+                        newStats.taxSummary.taxableDomestic += taxableVal;
+                        newStats.taxSummary.domestic += totalVal;
+                        newStats.taxSummary.totalGst += gstVal;
+                        newStats.domesticExportSplit.domesticCount++;
                     }
 
                     // Top Accounts
                     const cName = doc.account.name || 'Unknown';
-                    if (!accountMap[cName]) accountMap[cName] = 0;
-                    accountMap[cName] += totals.subtotal * multiplier; // Keep as is for logic if needed, but rename variable if possible
+                    accountMap[cName] = (accountMap[cName] || 0) + taxableVal;
+
+                    // Top Products
+                    (doc.items || []).forEach(item => {
+                        const amount = (Number(item.qty) * Number(item.rate)) * exRate;
+                        const pName = item.desc || 'Unknown Product';
+                        productMap[pName] = (productMap[pName] || 0) + amount;
+                    });
                 }
 
                 if (doc.type === 'Quotation') newStats.conversion.quotes++;
                 if (doc.type === 'Tax Invoice') newStats.conversion.invoices++;
 
-                // Document-wise grouping
-                if (!newStats.docsByType[doc.type]) {
-                    newStats.docsByType[doc.type] = [];
-                }
-                // Smart Status Logic
-                let displayStatus = doc.status || 'UNPAID';
-                const now = new Date();
+                if (!newStats.docsByType[doc.type]) newStats.docsByType[doc.type] = [];
 
-                if (doc.type === 'Tax Invoice' && displayStatus !== 'PAID' && doc.dueDate) {
+                let displayStatus = doc.status || 'UNPAID';
+                if ((doc.type === 'Tax Invoice' || doc.type === 'Purchase Invoice') && displayStatus !== 'PAID' && doc.dueDate) {
                     if (new Date(doc.dueDate) < now) displayStatus = 'OVERDUE';
                 }
-
                 if (doc.type === 'Quotation' && doc.validityDate) {
                     if (new Date(doc.validityDate) < now) displayStatus = 'EXPIRED';
                 }
@@ -1673,28 +1817,33 @@ function billApp() {
                     date: doc.date,
                     total: totals.total,
                     status: displayStatus,
-                    raw: doc // For operations
+                    raw: doc
                 });
             });
 
-            // Format Top Accounts
+            // Add Opening Balance to Outstanding
+            if (this.openingBalance && this.openingBalance.outstanding) {
+                newStats.outstanding += parseFloat(this.openingBalance.outstanding || 0);
+            }
+
             newStats.topAccounts = Object.entries(accountMap)
                 .map(([name, value]) => ({ name, value }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 5);
+                .sort((a, b) => b.value - a.value).slice(0, 5);
 
-            // Calculate Conversion Rate
+            newStats.topProducts = Object.entries(productMap)
+                .map(([name, value]) => ({ name, value }))
+                .sort((a, b) => b.value - a.value).slice(0, 5);
+
             if (newStats.conversion.quotes > 0) {
-                newStats.conversion.rate = Math.round((newStats.conversion.invoices / newStats.conversion.quotes) * 100);
+                newStats.conversion.rate = (newStats.conversion.invoices / newStats.conversion.quotes) * 100;
             }
 
             this.dashboardStats = newStats;
-
-            // Set active tab if current is invalid
             const types = Object.keys(newStats.docsByType);
             if (types.length > 0 && !types.includes(this.dashboardStats.activeTab)) {
                 this.dashboardStats.activeTab = types[0];
             }
+            this.$nextTick(() => lucide.createIcons());
         },
 
         loadDashboard() {
@@ -1845,6 +1994,11 @@ function billApp() {
                     });
 
                     const docStats = this.getDocTotals(doc);
+                    const itms = Object.values(rateGroups);
+                    const docIamt = itms.reduce((sum, itm) => sum + (itm.iamt || 0), 0);
+                    const docCamt = itms.reduce((sum, itm) => sum + (itm.camt || 0), 0);
+                    const docSamt = itms.reduce((sum, itm) => sum + (itm.samt || 0), 0);
+
                     b2b.push({
                         number: doc.number,
                         date: doc.date,
@@ -1853,9 +2007,12 @@ function billApp() {
                         name: doc.account.name,
                         gstin: doc.account.gstin,
                         pos: pos,
-                        itms: Object.values(rateGroups),
+                        itms: itms,
                         taxable: docStats.subtotal * multiplier,
-                        gst: docStats.tax * multiplier
+                        gst: docStats.tax * multiplier,
+                        iamt: docIamt,
+                        camt: docCamt,
+                        samt: docSamt
                     });
                 } else {
                     // Aggregate B2C by POS and Rate
@@ -2144,15 +2301,21 @@ function billApp() {
 
         isIGST(doc) {
             // New compliance logic
-            const target = doc?.account || this.doc.account;
+            const target = doc?.account || doc || this.doc.account;
+
+            // For Purchase Invoices from international vendors, it's always IGST (paid to customs)
+            if (this.doc.type === 'Purchase Invoice' && target.country && target.country !== 'India') {
+                return true;
+            }
+
             if (target.country && target.country !== 'India') return true; // Exports are IGST
 
             const targetGstin = target.gstin || '';
             if (!targetGstin || !this.doc.company.gstin) {
                 // For B2C, check state
-                const supplierState = this.gstSettings.state.toLowerCase();
+                const supplierState = (this.gstSettings.state || '').toLowerCase();
                 const customerState = (target.state || '').toLowerCase();
-                if (customerState && supplierState !== customerState) return true;
+                if (customerState && supplierState && supplierState !== customerState) return true;
                 return false;
             }
 
@@ -2161,20 +2324,40 @@ function billApp() {
 
         getGstr3bPortalData() {
             const stats = this.getGstDashboardStats();
-            // Simplified logic for GSTR-3B Table-wise layout
+
+            // Aggregate ITC from Purchase Invoices
+            let itc = { available: 0, import: 0, rcm: 0, ineligible: 0 };
+
+            this.savedDocs.forEach(doc => {
+                if (doc.type !== 'Purchase Invoice') return;
+                const totals = this.getDocTotals(doc);
+                const exRate = doc.exchangeRate || 1;
+                const tax = totals.tax * exRate;
+
+                if (doc.account && doc.account.country && doc.account.country !== 'India') {
+                    itc.import += tax;
+                } else if (doc.isRcm) {
+                    itc.rcm += tax;
+                } else if (doc.itcEligibility === 'Ineligible') {
+                    itc.ineligible += tax;
+                } else {
+                    itc.available += tax;
+                }
+            });
+
             return {
                 table31: {
                     a: { label: "Outward Taxable Supplies", val: stats.totalTaxable, tax: stats.totalGst },
                     b: { label: "Outward Taxable Supplies (Zero Rated)", val: 0, tax: 0 },
                     c: { label: "Other Outward Supplies (Nil Rated, Exempted)", val: 0, tax: 0 },
-                    d: { label: "Inward Supplies liable to Reverse Charge", val: 0, tax: 0 },
+                    d: { label: "Inward Supplies liable to Reverse Charge", val: itc.rcm, tax: itc.rcm },
                     e: { label: "Non-GST Outward Supplies", val: 0, tax: 0 }
                 },
                 table4: {
-                    a: { label: "ITC Available (Import of Goods/Services, Reverse Charge, etc.)", val: 0 },
+                    a: { label: "ITC Available (Import, RCM, etc.)", val: itc.available + itc.import + itc.rcm },
                     b: { label: "ITC Reversed", val: 0 },
-                    c: { label: "Net ITC Available", val: 0 },
-                    d: { label: "Ineligible ITC", val: 0 }
+                    c: { label: "Net ITC Available", val: itc.available + itc.import + itc.rcm },
+                    d: { label: "Ineligible ITC", val: itc.ineligible }
                 }
             };
         },
@@ -2413,6 +2596,10 @@ function billApp() {
                     });
 
                     const itms = Object.values(rateGroups);
+                    const docIamt = itms.reduce((sum, itm) => sum + (itm.iamt || 0), 0);
+                    const docCamt = itms.reduce((sum, itm) => sum + (itm.camt || 0), 0);
+                    const docSamt = itms.reduce((sum, itm) => sum + (itm.samt || 0), 0);
+
                     b2b.push({
                         number: doc.number,
                         date: doc.date,
@@ -2423,6 +2610,9 @@ function billApp() {
                         poDate: doc.poDate || '',
                         taxable: docTaxable,
                         gst: docGst,
+                        iamt: docIamt,
+                        camt: docCamt,
+                        samt: docSamt,
                         itms: itms
                     });
                 } else if (isInterstate && docTaxable > 250000) {
@@ -2529,29 +2719,17 @@ function billApp() {
             };
         },
 
-        async validateGstCompliance(doc) {
+        validateGstComplianceSync(doc) {
             const errors = [];
             const acc = doc.account || {};
+            const isPurchase = doc.type === 'Purchase Invoice';
             const isExport = (doc.currency && doc.currency !== 'INR') || (acc.country && acc.country !== 'India');
+            const isImport = isPurchase && acc.country !== 'India';
             const isB2B = !!acc.gstin;
-
-            // VAL_00: Duplicate Invoice Check
-            if (doc.type === 'Tax Invoice' && doc.number && !doc.number.includes('PREVIEW')) {
-                const { data: existing } = await window.supabase
-                    .from('documents')
-                    .select('id')
-                    .eq('number', doc.number)
-                    .neq('id', doc.id) // Exclude current doc if editing
-                    .maybeSingle();
-
-                if (existing) {
-                    errors.push(`VAL_00: Invoice number ${doc.number} already exists.`);
-                }
-            }
 
             // VAL_01: Export/LUT GST Validation
             const totals = this.getDocTotals(doc, true);
-            if (isExport && totals.tax > 0 && doc.supplyType === 'EXPORT_LUT') {
+            if (!isPurchase && isExport && totals.tax > 0 && doc.supplyType === 'EXPORT_LUT') {
                 errors.push("VAL_01: Supply under LUT must have 0% GST.");
             }
 
@@ -2561,22 +2739,41 @@ function billApp() {
             }
 
             // VAL_03: HSN/SAC Validation
-            const missingHsn = doc.items.some(item => !item.hsn || item.hsn.trim() === '');
+            const missingHsn = (doc.items || []).some(item => !item.hsn || item.hsn.trim() === '');
             if (missingHsn) {
                 errors.push("VAL_03: All line items must have a valid HSN/SAC code.");
             }
 
-            // VAL_06: Mandatory State for India
-            if (acc.country === 'India' && (!acc.state || acc.state.trim() === '')) {
-                errors.push("VAL_06: State is mandatory for Indian customers.");
+            // VAL_09: Import/BOE Validation
+            if (isImport) {
+                if (!doc.boeNumber) errors.push("VAL_09: Bill of Entry (BOE) Number is mandatory for imports.");
+                if (!doc.boeDate) errors.push("VAL_10: Bill of Entry (BOE) Date is mandatory for imports.");
+                if (!doc.portCode) errors.push("VAL_11: Port Code is mandatory for imports.");
             }
 
-            // VAL_07: Currency vs Country
-            if (acc.country === 'India' && doc.currency !== 'INR') {
-                errors.push("VAL_07: Indian customers must be billed in INR.");
-            }
-            if (acc.country !== 'India' && doc.currency === 'INR') {
-                errors.push("VAL_08: Foreign customers cannot be billed in INR.");
+            return {
+                valid: errors.length === 0,
+                errors: errors
+            };
+        },
+
+        async validateGstCompliance(doc) {
+            const validation = this.validateGstComplianceSync(doc);
+            const errors = [...validation.errors];
+            const isPurchase = doc.type === 'Purchase Invoice';
+
+            // VAL_00: Duplicate Invoice Check
+            if ((doc.type === 'Tax Invoice' || isPurchase) && doc.number && !doc.number.includes('PREVIEW')) {
+                const { data: existing } = await window.supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('number', doc.number)
+                    .neq('id', doc.id) // Exclude current doc if editing
+                    .maybeSingle();
+
+                if (existing) {
+                    errors.push(`VAL_00: ${isPurchase ? 'Vendor' : 'Invoice'} number ${doc.number} already exists.`);
+                }
             }
 
             return {
@@ -2586,15 +2783,9 @@ function billApp() {
         },
 
         getGstDashboardStats() {
-            // Refined stats using the new calculateGSTR1 logic (simulated for current date)
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-            // This is synchronous in current implementation for dashboard preview
-            // We'll filter savedDocs manually here for immediate UI feedback
+            // Refined stats logic
             const docs = this.savedDocs.filter(d =>
-                (d.type === 'Tax Invoice' || d.type === 'Credit Note' || d.type === 'Debit Note')
+                (d.type === 'Tax Invoice' || d.type === 'Credit Note' || d.type === 'Debit Note' || d.type === 'Purchase Invoice')
             );
 
             let stats = {
@@ -2602,22 +2793,30 @@ function billApp() {
                 b2cCount: 0,
                 totalTaxable: 0,
                 totalGst: 0,
-                exportCount: 0
+                exportCount: 0,
+                purchaseCount: 0,
+                totalItc: 0
             };
 
             docs.forEach(doc => {
+                const isPurchase = doc.type === 'Purchase Invoice';
                 const isExport = (doc.currency && doc.currency !== 'INR') || (doc.account && doc.account.country && doc.account.country !== 'India');
                 const isB2B = this.isB2B(doc.account);
                 const totals = this.getDocTotals(doc);
                 const multiplier = doc.type === 'Credit Note' ? -1 : 1;
                 const exRate = doc.exchangeRate || 1;
 
-                if (isExport) stats.exportCount++;
-                else if (isB2B) stats.b2bCount++;
-                else stats.b2cCount++;
+                if (isPurchase) {
+                    stats.purchaseCount++;
+                    stats.totalItc += totals.tax * exRate;
+                } else {
+                    if (isExport) stats.exportCount++;
+                    else if (isB2B) stats.b2bCount++;
+                    else stats.b2cCount++;
 
-                stats.totalTaxable += totals.subtotal * multiplier * exRate;
-                stats.totalGst += totals.tax * multiplier * exRate;
+                    stats.totalTaxable += totals.subtotal * multiplier * exRate;
+                    stats.totalGst += totals.tax * multiplier * exRate;
+                }
             });
 
             return stats;
@@ -2625,20 +2824,20 @@ function billApp() {
 
         updateComplianceHealth() {
             // Data Integrity: Check all Tax Invoices for HSN and GSTIN validity
-            const taxInvoices = this.savedDocs.filter(d => d.type === 'Tax Invoice');
-            if (taxInvoices.length === 0) {
+            const criticalDocs = this.savedDocs.filter(d => d.type === 'Tax Invoice' || d.type === 'Purchase Invoice');
+            if (criticalDocs.length === 0) {
                 this.complianceStats.score = 100;
                 this.complianceStats.dataIntegrity = 100;
                 return;
             }
 
             let validCount = 0;
-            taxInvoices.forEach(doc => {
-                const validation = this.validateGstCompliance(doc);
+            criticalDocs.forEach(doc => {
+                const validation = this.validateGstComplianceSync(doc);
                 if (validation.valid) validCount++;
             });
 
-            this.complianceStats.dataIntegrity = Math.round((validCount / taxInvoices.length) * 100);
+            this.complianceStats.dataIntegrity = Math.round((validCount / criticalDocs.length) * 100);
 
             // Filing Punctuality: % of filings done before due date in history
             const filings = this.gstHistory || [];
@@ -2874,9 +3073,9 @@ function billApp() {
                 csvContent += `Total GST,${f(data.totalGst)}\n\n`;
 
                 csvContent += 'B2B Invoices\n';
-                csvContent += 'Invoice No,Date,GSTIN,Account Name,PO Number,PO Date,Taxable Value,Total GST\n';
+                csvContent += 'Invoice No,Date,GSTIN,Account Name,PO Number,PO Date,Taxable Value,IGST,CGST,SGST,Total GST\n';
                 data.b2b.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.gstin},${inv.name},${inv.poNumber},${inv.poDate},${f(inv.taxable)},${f(inv.gst)}\n`;
+                    csvContent += `${inv.number},${inv.date},${inv.gstin},${inv.name},${inv.poNumber},${inv.poDate},${f(inv.taxable)},${f(inv.iamt)},${f(inv.camt)},${f(inv.samt)},${f(inv.gst)}\n`;
                 });
 
                 if (data.b2cl && data.b2cl.length > 0) {

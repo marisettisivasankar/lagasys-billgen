@@ -284,7 +284,7 @@
             x-transition:enter-end="scale-100 opacity-100">
 
             <!-- Header -->
-            <div class="px-10 py-8 bg-slate-900 text-white flex items-center justify-between relative overflow-hidden">
+            <div class="px-10 py-8 bg-slate-900 text-white flex items-center justify-between relative">
                 <div
                     class="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl">
                 </div>
@@ -295,8 +295,26 @@
                     </div>
                     <div>
                         <h2 class="text-3xl font-black heading-font tracking-tight">Executive Insights Hub</h2>
-                        <p class="text-slate-400 font-medium text-sm">Real-time business performance & revenue analytics
-                        </p>
+                        <div class="flex items-center space-x-3 mt-1">
+                            <span class="text-slate-400 font-medium text-sm">Showing data for</span>
+                            <div class="relative inline-block" x-data="{ open: false }">
+                                <button @click="open = !open"
+                                    class="bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-lg flex items-center space-x-2 hover:bg-blue-500/30 transition-all">
+                                    <span class="text-blue-400 font-black text-xs" x-text="'FY ' + selectedFY"></span>
+                                    <i data-lucide="chevron-down" class="w-3 h-3 text-blue-400"
+                                        :class="{'rotate-180': open}"></i>
+                                </button>
+                                <div x-show="open" @click.away="open = false"
+                                    class="absolute top-full left-0 mt-2 w-32 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
+                                    <template x-for="fy in availableFYs" :key="fy">
+                                        <button @click="setSelectedFY(fy); open = false"
+                                            class="w-full text-left px-4 py-2 text-xs font-bold hover:bg-slate-700 transition-colors"
+                                            :class="selectedFY === fy ? 'text-blue-400' : 'text-slate-300'"
+                                            x-text="'FY ' + fy"></button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <button @click="showDashboard = false"
@@ -334,7 +352,7 @@
                         </div>
                         <h3 class="text-3xl font-black text-slate-900 mb-1"
                             x-text="formatCurrency(dashboardStats.annualRevenue)"></h3>
-                        <p class="text-xs font-bold text-slate-400" x-text="getFYRange()"></p>
+                        <p class="text-xs font-bold text-slate-400" x-text="'FY ' + selectedFY"></p>
                     </div>
 
                     <div
@@ -362,8 +380,100 @@
                         <h3 class="text-3xl font-black text-green-600 mb-1"
                             x-text="dashboardStats.conversion.rate.toFixed(1) + '%'"></h3>
                         <p class="text-xs font-bold text-slate-400"
-                            x-text="dashboardStats.conversion.invoices + ' Invoices from ' + dashboardStats.conversion.quotes + ' Quotes'">
+                            x-text="dashboardStats.conversion.invoices + ' Invoices / ' + dashboardStats.conversion.quotes + ' Quotes'">
                         </p>
+                    </div>
+                </div>
+
+                <!-- Secondary Insights Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Sales Trend Chart (Simplified) -->
+                    <div class="lg:col-span-2 bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 class="text-xl font-black text-slate-800">Month-wise Sales Trend</h3>
+                                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">April to
+                                    March Performance</p>
+                            </div>
+                            <i data-lucide="bar-chart-3" class="w-6 h-6 text-blue-500"></i>
+                        </div>
+                        <div class="flex items-end justify-between h-48 px-2 gap-2">
+                            <template x-for="item in dashboardStats.monthWiseTrend" :key="item.month">
+                                <div class="flex-1 flex flex-col items-center group relative h-full justify-end">
+                                    <div
+                                        class="w-full bg-slate-50 rounded-lg relative overflow-hidden h-full flex items-end">
+                                        <div class="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-lg transition-all duration-1000 group-hover:from-blue-500 group-hover:to-blue-300"
+                                            :style="'height: ' + (item.value / (Math.max(...dashboardStats.monthWiseTrend.map(m => m.value)) || 1) * 100) + '%'">
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="text-[9px] font-black text-slate-400 mt-3 group-hover:text-blue-600 transition-colors"
+                                        x-text="item.month"></span>
+
+                                    <!-- Tooltip -->
+                                    <div
+                                        class="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap pointer-events-none z-20">
+                                        <span x-text="formatCurrency(item.value)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Tax & Export Summary -->
+                    <div class="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col">
+                        <div class="flex items-center justify-between mb-8">
+                            <h3 class="text-xl font-black text-slate-800">Tax & Volume</h3>
+                            <i data-lucide="pie-chart" class="w-6 h-6 text-indigo-500"></i>
+                        </div>
+                        <div class="space-y-6 flex-1 flex flex-col justify-center">
+                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total
+                                        GST Collected</span>
+                                    <i data-lucide="shield-check" class="w-3 h-3 text-green-500"></i>
+                                </div>
+                                <div class="text-xl font-black text-slate-900"
+                                    x-text="formatCurrency(dashboardStats.taxSummary.totalGst)"></div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <span class="text-[10px] font-black uppercase text-slate-400 block mb-1">Domestic
+                                        Count</span>
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                        <span class="text-lg font-black text-slate-800"
+                                            x-text="dashboardStats.domesticExportSplit.domesticCount"></span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] font-black uppercase text-slate-400 block mb-1">Export
+                                        Count</span>
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                        <span class="text-lg font-black text-slate-800"
+                                            x-text="dashboardStats.domesticExportSplit.exportCount"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pt-4 border-t border-slate-100">
+                                <div class="flex justify-between text-xs font-bold text-slate-500 mb-2">
+                                    <span>Domestic Revenue</span>
+                                    <span
+                                        x-text="((dashboardStats.taxSummary.domestic / (dashboardStats.taxSummary.domestic + dashboardStats.taxSummary.export || 1)) * 100).toFixed(0) + '%'"></span>
+                                </div>
+                                <div class="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                                    <div class="bg-blue-600 h-full"
+                                        :style="'width: ' + ((dashboardStats.taxSummary.domestic / (dashboardStats.taxSummary.domestic + dashboardStats.taxSummary.export || 1)) * 100) + '%'">
+                                    </div>
+                                    <div class="bg-indigo-600 h-full"
+                                        :style="'width: ' + ((dashboardStats.taxSummary.export / (dashboardStats.taxSummary.domestic + dashboardStats.taxSummary.export || 1)) * 100) + '%'">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -496,20 +606,60 @@
                                         class="text-[10px] font-black uppercase tracking-widest text-slate-400">Collected</span>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-8 w-full">
-                                <div class="text-center">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                            <div class="grid grid-cols-2 gap-8 w-full border-t border-slate-50 pt-8">
+                                <div class="text-center group">
+                                    <p
+                                        class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-green-600 transition-colors">
                                         Total Collected</p>
                                     <p class="text-xl font-black text-green-600"
                                         x-text="formatCurrency(dashboardStats.collected)"></p>
                                 </div>
-                                <div class="text-center">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                                <div class="text-center group">
+                                    <p
+                                        class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-red-600 transition-colors">
                                         Total Outstanding</p>
                                     <p class="text-xl font-black text-red-600"
                                         x-text="formatCurrency(dashboardStats.outstanding)"></p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Products & Services Section -->
+                <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="p-3 bg-amber-500 rounded-2xl text-white">
+                                <i data-lucide="package" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-black text-slate-800">Top Products & Services</h3>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">By Revenue
+                                    for FY <span x-text="selectedFY"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-8">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                            <template x-for="(p, idx) in dashboardStats.topProducts" :key="idx">
+                                <div
+                                    class="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all group">
+                                    <div
+                                        class="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center mb-4 group-hover:bg-amber-50 group-hover:border-amber-100 transition-all">
+                                        <span class="text-sm font-black text-slate-400 group-hover:text-amber-600"
+                                            x-text="'#' + (idx + 1)"></span>
+                                    </div>
+                                    <h4 class="font-bold text-slate-700 mb-2 truncate" :title="p.name" x-text="p.name">
+                                    </h4>
+                                    <div class="text-lg font-black text-slate-900" x-text="formatCurrency(p.value)">
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="dashboardStats.topProducts.length === 0">
+                                <div class="lg:col-span-5 text-center py-20 text-slate-400 italic">No product
+                                    performance data available for this period.</div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -981,9 +1131,30 @@
                     </div>
                 </div>
 
-                <div class="flex items-center space-x-3">
-                    <button @click="saveGlobalBanks()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-                    <button @click="resetGlobalBanks()" class="text-sm text-red-600">Reset to Samples</button>
+                <div class="mb-4">
+                    <h3 class="font-bold text-slate-800 mb-2">Accounting - FY Opening Balance</h3>
+                    <div class="p-3 border rounded-lg bg-blue-50/30">
+                        <p class="text-[11px] text-slate-500 mb-3 font-bold uppercase tracking-wider">Opening Balance
+                            for FY <span x-text="selectedFY" class="text-blue-600"></span></p>
+                        <div>
+                            <label class="text-xs text-slate-500 font-bold">Outstanding Amount (₹)</label>
+                            <input type="number" class="w-full border rounded px-3 py-2 mt-1 font-bold text-slate-800"
+                                x-model="openingBalance.outstanding" placeholder="0.00">
+                        </div>
+                        <div class="mt-3">
+                            <button @click="saveOpeningBalance()"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center">
+                                <i data-lucide="save" class="w-4 h-4 mr-2"></i>
+                                Save Opening Balance
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-4 border-t">
+                    <button @click="saveGlobalBanks(); notify('Company settings saved', 'success')"
+                        class="bg-slate-800 text-white px-6 py-2 rounded-xl font-bold">Save All Settings</button>
+                    <button @click="resetGlobalBanks()" class="text-xs text-red-600 font-bold">Reset Defaults</button>
                 </div>
             </div>
         </div>
@@ -1012,8 +1183,15 @@
                     </div>
                     <div>
                         <h2 class="text-3xl font-black heading-font tracking-tight">GST Compliance Center</h2>
-                        <p class="text-blue-300/60 text-sm font-semibold tracking-wide uppercase">Intelligent Returns &
-                            Compliance Management</p>
+                        <div class="flex items-center space-x-3 mt-1">
+                            <p class="text-blue-300/60 text-sm font-semibold tracking-wide uppercase">Intelligent
+                                Returns & Compliance Management</p>
+                            <span class="w-1 h-1 bg-blue-500/40 rounded-full"></span>
+                            <p class="text-blue-400 text-sm font-black flex items-center">
+                                <i data-lucide="calendar" class="w-4 h-4 mr-1.5 opacity-60"></i>
+                                FY <span x-text="selectedFY" class="ml-1"></span>
+                            </p>
+                        </div>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4 relative z-10">
@@ -2742,6 +2920,92 @@
                                 </div>
                             </div>
                         </template>
+                        <template x-if="doc.type === 'Purchase Invoice'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">Vendor Invoice
+                                        No.</label>
+                                    <input type="text" x-model="doc.poNumber"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 mb-1">Vendor Invoice
+                                            Date</label>
+                                        <input type="date" x-model="doc.poDate"
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-600 mb-1">Due Date</label>
+                                        <input type="date" x-model="doc.dueDate"
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    </div>
+                                </div>
+
+                                <!-- Import Details (Conditional) -->
+                                <div x-show="doc.account.country !== 'India'"
+                                    class="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
+                                    <h3
+                                        class="text-xs font-black text-blue-800 uppercase tracking-wider flex items-center">
+                                        <i data-lucide="ship" class="w-3 h-3 mr-1.5"></i>
+                                        Import Details (Bill of Entry)
+                                    </h3>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="col-span-2">
+                                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">BOE
+                                                Number</label>
+                                            <input type="text" x-model="doc.boeNumber"
+                                                class="w-full border-white rounded-lg px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">BOE
+                                                Date</label>
+                                            <input type="date" x-model="doc.boeDate"
+                                                class="w-full border-white rounded-lg px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Port
+                                                Code</label>
+                                            <input type="text" x-model="doc.portCode" placeholder="INNSA1"
+                                                class="w-full border-white rounded-lg px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ITC & RCM -->
+                                <div class="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                                    <h3
+                                        class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center">
+                                        <i data-lucide="briefcase" class="w-3 h-3 mr-1.5"></i>
+                                        Accounting & ITC
+                                    </h3>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">ITC
+                                                Eligibility</label>
+                                            <select x-model="doc.itcEligibility"
+                                                class="w-full border-white rounded-lg px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                                <option value="Inputs">Inputs</option>
+                                                <option value="Input Services">Input Services</option>
+                                                <option value="Capital Goods">Capital Goods</option>
+                                                <option value="Ineligible">Ineligible</option>
+                                            </select>
+                                        </div>
+                                        <div
+                                            class="flex items-center justify-between bg-white p-2 rounded-lg border border-slate-100 relative">
+                                            <span class="text-xs font-bold text-slate-700">Reverse Charge (RCM)</span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" x-model="doc.isRcm" class="sr-only peer">
+                                                <div
+                                                    class="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600">
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -3097,7 +3361,7 @@
                                         </div>
                                     </div>
                                 </template>
-                                <template x-if="['Credit Note', 'Debit Note'].includes(doc.type)">
+                                <template x-if="doc.type === 'Credit Note' || doc.type === 'Debit Note'">
                                     <div class="contents">
                                         <div class="p-1 border-r border-b border-black">
                                             <p class="font-medium text-[9px] text-slate-500">Original Invoice No.</p>
@@ -3114,6 +3378,33 @@
                                             <p class="font-bold" x-text="doc.reasonForIssue || '-'"></p>
                                         </div>
                                         <div class="p-1">
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="doc.type === 'Purchase Invoice'">
+                                    <div class="contents">
+                                        <div class="p-1 border-r border-b border-black">
+                                            <p class="font-medium text-[9px] text-slate-500">Vendor Invoice No.</p>
+                                            <p class="font-bold" x-text="doc.poNumber || '-'"></p>
+                                        </div>
+                                        <div class="p-1 border-b border-black">
+                                            <p class="font-medium text-[9px] text-slate-500">Vendor Invoice Date</p>
+                                            <p class="font-bold" x-text="doc.poDate ? formatDate(doc.poDate) : '-'"></p>
+                                        </div>
+                                        <div class="p-1 border-r border-black" x-show="doc.account.country !== 'India'">
+                                            <p class="font-medium text-[9px] text-slate-500">Bill of Entry (BOE)</p>
+                                            <p class="font-bold"
+                                                x-text="(doc.boeNumber || '-') + ' / ' + (doc.boeDate ? formatDate(doc.boeDate) : '-')">
+                                            </p>
+                                        </div>
+                                        <div class="p-1 border-b border-black" x-show="doc.account.country === 'India'">
+                                            <p class="font-medium text-[9px] text-slate-500">Due Date</p>
+                                            <p class="font-bold" x-text="doc.dueDate ? formatDate(doc.dueDate) : '-'">
+                                            </p>
+                                        </div>
+                                        <div class="p-1" x-show="doc.account.country !== 'India'">
+                                            <p class="font-medium text-[9px] text-slate-500">Port Code</p>
+                                            <p class="font-bold" x-text="doc.portCode || '-'"></p>
                                         </div>
                                     </div>
                                 </template>
