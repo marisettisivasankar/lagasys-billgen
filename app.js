@@ -34,7 +34,8 @@ function billApp() {
         ledgerControls: {
             search: '',
             startDate: '',
-            endDate: ''
+            endDate: '',
+            currency: 'All'
         },
         savedDocs: [],
         showGstDashboard: false,
@@ -64,21 +65,27 @@ function billApp() {
         contactForm: { id: null, salutation: 'Mr.', first_name: '', last_name: '', account_id: '', account_name: '', title: '', mobile: '', email: '' },
 
         showProductManager: false,
-        productSearch: '',
+        showProdForm: false,
         prodForm: {
             id: null,
             desc: '',
             hsn: '',
             rate: 0,
-            taxRate: 18
+            taxRate: 18,
+            type: 'GOODS'
         },
+        productSearch: '',
         accountForm: {
             id: null,
             name: '',
             address: '',
             gstin: '',
             state: '',
-            pan: ''
+            pan: '',
+            country: 'India',
+            currency: 'INR',
+            customer_type: 'B2C',
+            is_export: false
         },
         gstSettings: {
             taxpayerType: 'Regular', // 'Regular', 'Composition', 'TDS/TCS'
@@ -165,64 +172,45 @@ function billApp() {
             revision: 0,
             type: 'Quotation',
             customTitle: '',
-            number: '', // Set in init
+            number: '',
             currency: 'INR',
             exchangeRate: 1,
-            exportType: 'Taxable', // 'Taxable' or 'LUT'
+            supplyType: 'DOMESTIC_B2C', // 'EXPORT_LUT', 'DOMESTIC_B2B', 'DOMESTIC_B2C'
+            isPosted: false,
             date: new Date().toISOString().split('T')[0],
             validityDate: '',
             paymentTerms: '100% Advance',
             deliveryTime: 'Within 7 Days',
             deliveryMode: 'By Courier/Hand',
-            subject: 'AERMOD View AMC for One Year',
-            reference: 'To your email enquiry Dated 03rd April 2025',
+            subject: '',
+            reference: '',
             challanNo: '',
             challanDate: '',
             transport: '',
             vehicleNo: '',
-            vehicleNo: '',
             poNumber: '',
             poDate: '',
             dueDate: '',
-            // Credit/Debit Note specific
             originalInvoiceNo: '',
             originalInvoiceDate: '',
             reasonForIssue: '',
+
             account: {
-                name: 'LaGa Systems Pvt Ltd',
-                address: 'Plot No 246, Road No 78, Jubilee Hills, Hyderabad - 500033',
-                gstin: '36AABCL2941H1ZN',
-                state: 'Telangana',
-                pan: ''
+                name: '',
+                address: '',
+                gstin: '',
+                state: '',
+                country: 'India',
+                currency: 'INR'
             },
             items: [
-                { desc: 'AERMOD View AMC for One Year', hsn: '997331', qty: 1, rate: 72000, discount: 0, taxRate: 18 }
+                { desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18, type: 'GOODS' }
             ],
-            bank: {
-                name: 'LAGA SYSTEMS PVT LTD',
-                bankName: 'Axis Bank',
-                branch: 'Hyderabad Main Branch (Begumpet)',
-                acc: '008010200057114',
-                ifsc: 'UTIB0000008'
-            },
             banks: {
-                INR: {
-                    name: 'LAGA SYSTEMS PVT LTD',
-                    bankName: 'Axis Bank',
-                    branch: 'Hyderabad Main Branch (Begumpet)',
-                    acc: '008010200057114',
-                    ifsc: 'UTIB0000008'
-                },
-                USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
-                EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
+                INR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis Bank', branch: 'Hyderabad Main Branch (Begumpet)', acc: '008010200057114', ifsc: 'UTIB0000008' },
+                USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis bank', branch: 'Hyderabad Main (Begumpet)', acc: '910020023367087', ifsc: 'UTIB0000008/AXISINBB008' },
+                EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: 'BE123456789012', ifsc: 'SWIFTEUR456' }
             },
-            bankChargesAmount: 0,
-            bankChargesEditable: true,
-            tnc: [
-                'Subject to Hyderabad Jurisdiction.',
-                'The software is warranted for any design defects as per specification for 1 Year from the date of supply. During the warranty period you will get free upgrades or Technical Support.',
-                'The above price doesn\'t include Installation and Training.'
-            ],
             taxRate: 18
         },
 
@@ -239,8 +227,9 @@ function billApp() {
         },
 
         globalBanks: {
-            USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample USD Bank', branch: 'NY Branch', acc: '', ifsc: '' },
-            EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: '', ifsc: '' }
+            INR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis Bank', branch: 'Hyderabad Main Branch (Begumpet)', acc: '008010200057114', ifsc: 'UTIB0000008' },
+            USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis bank', branch: 'Hyderabad Main (Begumpet)', acc: '910020023367087', ifsc: 'UTIB0000008/AXISINBB008' },
+            EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: 'BE123456789012', ifsc: 'SWIFTEUR456' }
         },
 
         allowedTaxSlabs: [0, 5, 18, 40],
@@ -467,7 +456,9 @@ function billApp() {
         },
 
         addItem() {
-            this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate || 18) });
+            let defaultTax = 18;
+            if (this.doc.supplyType === 'EXPORT_LUT') defaultTax = 0;
+            this.doc.items.push({ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: this.normalizeTaxRate(this.doc.taxRate || defaultTax) });
             this.$nextTick(() => lucide.createIcons());
         },
 
@@ -483,8 +474,22 @@ function billApp() {
             this.doc.tnc.splice(index, 1);
         },
 
-        selectAccountObj(c) {
-            this.doc.account = { ...c };
+        selectAccountObj(acc) {
+            this.doc.account = {
+                name: acc.name,
+                address: acc.address,
+                gstin: acc.gstin,
+                state: acc.state,
+                pan: acc.pan,
+                country: acc.country || 'India',
+                currency: acc.currency || 'INR'
+            };
+            this.doc.currency = acc.currency || 'INR';
+            if (this.doc.currency === 'INR') {
+                this.doc.exchangeRate = 1;
+            }
+            this.updateSupplyType();
+            this.saveCurrentDoc();
         },
 
         selectProductObj(index, p) {
@@ -635,12 +640,12 @@ function billApp() {
         openProductManager() {
             this.showProductManager = true;
             this.showProdForm = false;
-            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
+            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18, type: 'GOODS' };
             this.$nextTick(() => lucide.createIcons());
         },
 
         resetProductForm() {
-            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18 };
+            this.prodForm = { id: null, desc: '', hsn: '', rate: 0, taxRate: 18, type: 'GOODS' };
             this.showProdForm = true;
             this.$nextTick(() => lucide.createIcons());
         },
@@ -653,7 +658,7 @@ function billApp() {
 
         async saveProductForm() {
             if (!this.prodForm.desc) {
-                this.notify('Product Description is required', 'warning');
+                this.notify('Description is required', 'warning');
                 return;
             }
 
@@ -661,7 +666,8 @@ function billApp() {
                 desc: this.prodForm.desc,
                 hsn: this.prodForm.hsn,
                 rate: parseFloat(this.prodForm.rate) || 0,
-                tax_rate: parseInt(this.prodForm.taxRate) || 18
+                tax_rate: parseInt(this.prodForm.taxRate) || 18,
+                type: this.prodForm.type || 'GOODS'
             };
 
             if (this.prodForm.id) {
@@ -709,12 +715,12 @@ function billApp() {
         openAccountManager() {
             this.showAccountManager = true;
             this.showAccountForm = false;
-            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '', country: 'India', currency: 'INR', customer_type: 'B2C', is_export: false };
             this.$nextTick(() => lucide.createIcons());
         },
 
         resetAccountForm() {
-            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '', country: 'India', currency: 'INR', customer_type: 'B2C', is_export: false };
             this.showAccountForm = true;
             this.$nextTick(() => lucide.createIcons());
         },
@@ -731,12 +737,21 @@ function billApp() {
                 return;
             }
 
+            // Auto-derivation logic
+            const isExport = this.accountForm.country !== 'India';
+            const customerType = isExport ? 'B2B' : (this.accountForm.gstin ? 'B2B' : 'B2C');
+
             const payload = {
                 name: this.accountForm.name,
                 address: this.accountForm.address,
                 gstin: this.accountForm.gstin,
                 state: this.accountForm.state,
-                pan: this.accountForm.pan
+                pan: this.accountForm.pan,
+                country: this.accountForm.country || 'India',
+                currency: this.accountForm.currency || 'INR',
+                customer_type: customerType,
+                is_export: isExport,
+                lut_applicable: isExport
             };
 
             if (this.accountForm.id) {
@@ -760,7 +775,7 @@ function billApp() {
         },
 
         resetAccountFormManual() {
-            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '' };
+            this.accountForm = { id: null, name: '', address: '', gstin: '', state: '', pan: '', country: 'India', currency: 'INR', customer_type: 'B2C', is_export: false };
         },
 
         async deleteAccount(id) {
@@ -928,41 +943,6 @@ function billApp() {
             });
         },
 
-        async saveDocToHistory() {
-            if (!this.doc.number) {
-                this.notify('Please generate document number first', 'warning');
-                return;
-            }
-            const payload = {
-                type: this.doc.type,
-                number: this.doc.number,
-                revision: this.doc.revision || 0,
-                date: this.doc.date,
-                currency: this.doc.currency,
-                account: this.doc.account,
-                items: this.doc.items,
-                banks: this.doc.banks,
-                totals: {
-                    subtotal: this.subTotal(),
-                    tax: this.taxAmount(),
-                    total: this.grandTotal()
-                },
-                tnc: this.doc.tnc,
-                settings: this.doc.settings,
-                status: 'DRAFT',
-                created_by: this.user?.id
-            };
-            const { error } = await window.supabase
-                .from('documents')
-                .upsert(payload, { onConflict: 'number' });
-            if (error) {
-                this.notify('Draft save failed: ' + error.message, 'error');
-                return;
-            }
-            this.notify('Draft saved (temporary)', 'success');
-            await this.loadHistory(); // Reload to refresh dashboard
-        },
-
         async loadHistory() {
             const { data, error } = await window.supabase
                 .from('documents')
@@ -1035,7 +1015,10 @@ function billApp() {
                 .eq('id', this.user.id)
                 .single();
             if (data && data.data) {
-                this.doc = data.data;
+                this.doc = { ...this.doc, ...data.data };
+                if (!this.doc.banks) {
+                    this.doc.banks = JSON.parse(JSON.stringify(this.globalBanks));
+                }
                 if (this.doc.revision === undefined) this.doc.revision = 0;
             }
         },
@@ -1057,7 +1040,12 @@ function billApp() {
                 this.doc.originalInvoiceNo = '';
                 this.doc.originalInvoiceDate = '';
                 this.doc.reasonForIssue = '';
-                this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '' };
+                this.doc.number = '';
+                this.doc.isPosted = false;
+                this.doc.currency = 'INR';
+                this.doc.exchangeRate = 1;
+                this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '', country: 'India' };
+                this.updateSupplyType();
                 this.doc.taxRate = 18;
                 this.doc.items = [{ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18 }];
                 this.doc.tnc = (this.doc.type === 'Delivery Challan')
@@ -1067,6 +1055,11 @@ function billApp() {
                         'The software is warranted for any design defects as per specification for 1 Year from the date of supply.',
                         'The above price doesn\'t include Installation and Training.'
                     ];
+                this.doc.banks = {
+                    INR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis Bank', branch: 'Hyderabad Main Branch (Begumpet)', acc: '008010200057114', ifsc: 'UTIB0000008' },
+                    USD: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Axis bank', branch: 'Hyderabad Main (Begumpet)', acc: '910020023367087', ifsc: 'UTIB0000008/AXISINBB008' },
+                    EUR: { name: 'LAGA SYSTEMS PVT LTD', bankName: 'Sample EUR Bank', branch: 'Frankfurt Branch', acc: 'BE123456789012', ifsc: 'SWIFTEUR456' }
+                };
                 this.saveCurrentDoc();
                 this.notify('Document cleared', 'info');
             }
@@ -1080,15 +1073,16 @@ function billApp() {
         },
 
         itemTaxAmount(item, docType) {
-            if (this.doc.exportType === 'LUT' && this.doc.currency !== 'INR') return 0;
+            if (this.doc.supplyType === 'EXPORT_LUT' && this.doc.currency !== 'INR') return 0;
             const currentType = docType || this.doc.type;
             const ratePercent = Number((item.taxRate !== undefined) ? item.taxRate : (this.doc.taxRate || 18));
             return this.itemTaxableValue(item, currentType) * (ratePercent / 100);
         },
 
         // Resilient calculation for any doc (used for History/GST)
-        getDocTotals(doc) {
-            if (doc.totals && doc.totals.subtotal !== undefined) {
+        // Resilient calculation for any doc (used for History/GST)
+        getDocTotals(doc, force = false) {
+            if (!force && doc.totals && doc.totals.subtotal !== undefined) {
                 return doc.totals;
             }
             // Fallback: Calculate from items
@@ -1098,7 +1092,7 @@ function billApp() {
                 return sum + (amount - discountAmt);
             }, 0);
             const tax = (doc.items || []).reduce((sum, item) => {
-                if (doc.exportType === 'LUT' && doc.currency !== 'INR') return sum;
+                if (doc.supplyType === 'EXPORT_LUT' && doc.currency !== 'INR') return sum;
                 const amount = (Number(item.qty) * Number(item.rate));
                 const discountAmt = (doc.type === 'Quotation') ? amount * (Number(item.discount || 0) / 100) : 0;
                 const taxable = amount - discountAmt;
@@ -1160,6 +1154,28 @@ function billApp() {
             return Math.round(this.grandTotalRaw());
         },
 
+
+
+        updateSupplyType() {
+            const acc = this.doc.account;
+            if (acc.country && acc.country !== 'India') {
+                this.doc.supplyType = 'EXPORT_LUT';
+                // Automatically set tax rate to 0 for exports
+                this.doc.items.forEach(item => item.taxRate = 0);
+            } else if (acc.gstin && acc.gstin.trim() !== '') {
+                this.doc.supplyType = 'DOMESTIC_B2B';
+            } else {
+                this.doc.supplyType = 'DOMESTIC_B2C';
+            }
+        },
+
+        getExportRemark() {
+            if (this.doc.supplyType === 'EXPORT_LUT') {
+                return "Supply meant for export under LUT without payment of IGST";
+            }
+            return "";
+        },
+
         totalQty() {
             return this.doc.items.reduce((sum, item) => sum + Number(item.qty), 0);
         },
@@ -1175,14 +1191,21 @@ function billApp() {
             return curr ? curr.symbol : '₹';
         },
 
+        ensureBankExists() {
+            const currency = this.doc.currency || 'INR';
+            if (!this.doc.banks) this.doc.banks = {};
+            if (!this.doc.banks[currency]) {
+                // Try globalBanks first, then default to empty
+                this.doc.banks[currency] = this.globalBanks[currency] ?
+                    JSON.parse(JSON.stringify(this.globalBanks[currency])) :
+                    { name: '', bankName: '', acc: '', branch: '', ifsc: '' };
+            }
+        },
+
         bankForCurrency() {
-            if (this.doc.currency === 'INR') {
-                return this.doc.bank || { name: '', bankName: '', acc: '', branch: '', ifsc: '' };
-            }
-            if (this.globalBanks && this.globalBanks[this.doc.currency]) {
-                return this.globalBanks[this.doc.currency];
-            }
-            return { name: '', bankName: '', acc: '', branch: '', ifsc: '' };
+            const currency = this.doc.currency || 'INR';
+            this.ensureBankExists(); // Double check
+            return this.doc.banks[currency];
         },
 
         formatDate(dateStr) {
@@ -1280,12 +1303,23 @@ function billApp() {
 
                 console.log('Finalizing document:', finalNumber);
 
+                // --- GST Compliance Hard Block ---
+                const validation = await this.validateGstCompliance(this.doc);
+                if (!validation.valid) {
+                    this.notify('Compliance Error: ' + validation.errors.join(' | '), 'error', 10000);
+                    this.isSaving = false;
+                    return;
+                }
+
                 const payload = {
                     type: this.doc.type,
                     number: finalNumber,
                     revision: this.doc.revision || 0,
                     date: this.doc.date,
                     currency: this.doc.currency,
+                    exchangeRate: this.doc.exchangeRate || 1,
+                    supplyType: this.doc.supplyType || 'DOMESTIC_B2C',
+                    isPosted: true, // Permanent lock
                     account: this.doc.account,
                     items: this.doc.items,
                     banks: this.doc.banks,
@@ -1294,6 +1328,8 @@ function billApp() {
                         tax: this.taxAmount(),
                         total: this.grandTotal()
                     },
+                    poNumber: this.doc.poNumber || '',
+                    poDate: this.doc.poDate || '',
                     tnc: this.doc.tnc,
                     settings: this.doc.settings,
                     status: 'FINAL',
@@ -1322,9 +1358,11 @@ function billApp() {
                 }).from(element).save();
 
                 document.title = oldTitle;
+                this.doc.isPosted = true; // Lock the current draft too
+                await this.saveCurrentDoc();
                 await this.resetDraftOnly();
                 await this.loadHistory();
-                this.notify('Document saved and PDF generated successfully!', 'success');
+                this.notify('Document posted and PDF generated successfully!', 'success');
             } catch (err) {
                 console.error('Save PDF Error:', err);
                 this.notify('Error saving PDF: ' + (err.message || err), 'error');
@@ -1335,13 +1373,20 @@ function billApp() {
 
         async resetDraftOnly() {
             this.doc.number = '';
-            this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '' };
-            this.doc.items = [{ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18 }];
+            this.doc.isPosted = false;
+            this.doc.currency = 'INR';
+            this.doc.exchangeRate = 1;
+            this.doc.account = { name: '', address: '', gstin: '', state: '', pan: '', country: 'India' };
+            this.doc.items = [{ desc: '', hsn: '', qty: 1, rate: 0, discount: 0, taxRate: 18, type: 'GOODS' }];
             this.doc.subject = '';
             this.doc.reference = '';
             this.doc.poNumber = '';
             this.doc.poDate = '';
             this.doc.dueDate = '';
+            this.doc.originalInvoiceNo = '';
+            this.doc.originalInvoiceDate = '';
+            this.doc.reasonForIssue = '';
+            this.updateSupplyType();
             await this.saveCurrentDoc();
         },
 
@@ -1716,7 +1761,7 @@ function billApp() {
 
         getFilteredDocs(type) {
             const docs = this.dashboardStats.docsByType[type] || [];
-            if (!this.ledgerControls.search && !this.ledgerControls.startDate && !this.ledgerControls.endDate) {
+            if (!this.ledgerControls.search && !this.ledgerControls.startDate && !this.ledgerControls.endDate && this.ledgerControls.currency === 'All') {
                 return docs;
             }
 
@@ -1737,7 +1782,13 @@ function billApp() {
                     matchesDate = matchesDate && new Date(doc.date) <= new Date(this.ledgerControls.endDate);
                 }
 
-                return matchesSearch && matchesDate;
+                // Currency Filter
+                let matchesCurrency = true;
+                if (this.ledgerControls.currency !== 'All') {
+                    matchesCurrency = doc.raw.currency === this.ledgerControls.currency;
+                }
+
+                return matchesSearch && matchesDate && matchesCurrency;
             });
         },
 
@@ -2092,13 +2143,20 @@ function billApp() {
         },
 
         isIGST(doc) {
-            // If it's a doc object (for dashboard/history)
-            const targetGstin = doc?.account?.gstin || doc;
-            const isForeign = doc?.currency && doc.currency !== 'INR';
-            if (isForeign) return true; // Exports are treated as IGST (Inter-state)
-            if (!targetGstin || !this.doc.company.gstin) return false;
-            const gstinStr = typeof targetGstin === 'string' ? targetGstin : '';
-            return gstinStr.substring(0, 2) !== this.doc.company.gstin.substring(0, 2);
+            // New compliance logic
+            const target = doc?.account || this.doc.account;
+            if (target.country && target.country !== 'India') return true; // Exports are IGST
+
+            const targetGstin = target.gstin || '';
+            if (!targetGstin || !this.doc.company.gstin) {
+                // For B2C, check state
+                const supplierState = this.gstSettings.state.toLowerCase();
+                const customerState = (target.state || '').toLowerCase();
+                if (customerState && supplierState !== customerState) return true;
+                return false;
+            }
+
+            return targetGstin.substring(0, 2) !== this.doc.company.gstin.substring(0, 2);
         },
 
         getGstr3bPortalData() {
@@ -2137,6 +2195,39 @@ function billApp() {
             } else {
                 console.error('GST Save Error:', error);
                 this.notify('Failed to save GST return: ' + error.message, 'error');
+            }
+        },
+
+        async saveDocToHistory() {
+            if (!this.doc.account.name) {
+                this.notify('Account Name is required to save draft', 'warning');
+                return;
+            }
+
+            // For Drafts, we don't assign a permanent serial number if it's a Tax Invoice
+            let draftNumber = this.doc.number;
+            if (!draftNumber || draftNumber.includes('PREVIEW')) {
+                const prefix = this.getDocPrefix(this.doc.type);
+                draftNumber = `${prefix}-DRAFT-${Date.now()}`;
+            }
+
+            try {
+                const payload = {
+                    ...this.doc,
+                    number: draftNumber,
+                    status: 'DRAFT',
+                    isPosted: false,
+                    updated_at: new Date().toISOString()
+                };
+
+                const { error } = await window.supabase.from('documents').upsert(payload);
+                if (error) throw error;
+
+                this.doc.number = draftNumber;
+                this.notify('Draft saved to history', 'success');
+                await this.loadHistory();
+            } catch (err) {
+                this.notify('Failed to save history: ' + err.message, 'error');
             }
         },
 
@@ -2238,62 +2329,83 @@ function billApp() {
             );
 
             const b2b = [];
-            const b2cMap = {}; // Key: POS-Rate
+            const b2cl = []; // B2C Large: Unregistered + Inter-state + Value > 2.5L
+            const b2csMap = {}; // B2C Small: Aggregated by POS and Rate
+            const exports = []; // Table 6A: Exports under LUT
             const hsnMap = {}; // Key: HSN-Rate
             let totalTaxable = 0;
             let totalGst = 0;
 
             docs.forEach(doc => {
                 const multiplier = doc.type === 'Credit Note' ? -1 : 1;
-                const isB2B = doc.account && doc.account.gstin;
+                const isB2B = this.isB2B(doc.account);
+                const isExport = (doc.currency && doc.currency !== 'INR') || (doc.account && doc.account.country && doc.account.country !== 'India');
                 const pos = isB2B ? doc.account.gstin.substring(0, 2) : (this.getGstStateCode(doc.account.gstin) || this.doc.company.gstin.substring(0, 2));
+                const isInterstate = pos !== this.doc.company.gstin.substring(0, 2);
 
                 const totals = this.getDocTotals(doc);
+                const exRate = doc.exchangeRate || 1;
+                const docTaxable = totals.subtotal * multiplier * exRate;
+                const docGst = totals.tax * multiplier * exRate;
 
                 // Aggregate HSN Summary (Section 12)
                 doc.items.forEach(item => {
-                    const hsn = item.hsn || '999999'; // Default HSN
+                    const hsn = item.hsn || '999999';
                     const r = Number(item.taxRate || 18);
-                    const hsnKey = `${hsn}-${r}`;
+
+                    // Determine HSN Group Type: INTRA, INTER, or EXPORT
+                    let hsnLocation = 'INTRA';
+                    if (isExport) hsnLocation = 'EXPORT';
+                    else if (isInterstate) hsnLocation = 'INTER';
+
+                    // Key includes location to separate IGST from CGST/SGST rows for same HSN
+                    const hsnKey = `${hsn}-${r}-${hsnLocation}`;
 
                     if (!hsnMap[hsnKey]) {
-                        hsnMap[hsnKey] = { hsn, uqc: 'NOS', qty: 0, txval: 0, iamt: 0, camt: 0, samt: 0, rt: r };
+                        hsnMap[hsnKey] = { hsn, uqc: 'NOS', qty: 0, txval: 0, iamt: 0, camt: 0, samt: 0, rt: r, type: hsnLocation };
                     }
 
-                    const exRate = doc.exchangeRate || 1;
                     const itemTxval = (item.qty * item.rate) * multiplier * exRate;
                     const itemTax = itemTxval * (r / 100);
 
                     hsnMap[hsnKey].qty += (item.qty * multiplier);
                     hsnMap[hsnKey].txval += itemTxval;
 
-                    if (isB2B && this.isIGST(doc.account.gstin)) {
+                    if (isExport) {
+                        if (doc.supplyType === 'EXPORT_LUT') {
+                            // LUT: Add Taxable Value, but 0 GST
+                            hsnMap[hsnKey].iamt += 0;
+                        } else {
+                            // Export with Payment: Add IGST
+                            hsnMap[hsnKey].iamt += itemTax;
+                        }
+                    } else if (isInterstate) {
                         hsnMap[hsnKey].iamt += itemTax;
-                    } else if (isB2B) {
+                    } else {
                         hsnMap[hsnKey].camt += itemTax / 2;
                         hsnMap[hsnKey].samt += itemTax / 2;
-                    } else {
-                        // For B2C, check POS vs Company GSTIN
-                        if (pos !== this.doc.company.gstin.substring(0, 2)) {
-                            hsnMap[hsnKey].iamt += itemTax;
-                        } else {
-                            hsnMap[hsnKey].camt += itemTax / 2;
-                            hsnMap[hsnKey].samt += itemTax / 2;
-                        }
                     }
                 });
 
-                if (isB2B) {
-                    // Item aggregation for B2B JSON structure compatibility
+                // Classification into Tables
+                if (isExport) {
+                    exports.push({
+                        number: doc.number,
+                        date: doc.date,
+                        value: docTaxable,
+                        type: 'EXPWP', // Export Without Payment (LUT)
+                        shippingBill: doc.shippingBill || '',
+                        shippingDate: doc.shippingDate || ''
+                    });
+                } else if (isB2B) {
                     const rateGroups = {};
                     doc.items.forEach(item => {
                         const r = Number(item.taxRate || 18);
                         if (!rateGroups[r]) rateGroups[r] = { rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
-                        const exRate = doc.exchangeRate || 1;
                         const txval = (item.qty * item.rate) * multiplier * exRate;
                         const tax = txval * (r / 100);
                         rateGroups[r].txval += txval;
-                        if (this.isIGST(doc)) rateGroups[r].iamt += tax;
+                        if (isInterstate) rateGroups[r].iamt += tax;
                         else {
                             rateGroups[r].camt += tax / 2;
                             rateGroups[r].samt += tax / 2;
@@ -2304,49 +2416,61 @@ function billApp() {
                     b2b.push({
                         number: doc.number,
                         date: doc.date,
-                        poNumber: doc.poNumber || '',
-                        poDate: doc.poDate || '',
                         gstin: doc.account.gstin,
                         name: doc.account.name,
-                        taxable: (totals.subtotal * multiplier) * (doc.exchangeRate || 1),
-                        gst: (totals.tax * multiplier) * (doc.exchangeRate || 1),
-                        iamt: itms.reduce((s, i) => s + i.iamt, 0),
-                        camt: itms.reduce((s, i) => s + i.camt, 0),
-                        samt: itms.reduce((s, i) => s + i.samt, 0),
+                        pos: pos,
+                        poNumber: doc.poNumber || '',
+                        poDate: doc.poDate || '',
+                        taxable: docTaxable,
+                        gst: docGst,
                         itms: itms
                     });
+                } else if (isInterstate && docTaxable > 250000) {
+                    // B2C Large (Table 5)
+                    b2cl.push({
+                        number: doc.number,
+                        date: doc.date,
+                        pos: pos,
+                        taxable: docTaxable,
+                        rt: doc.items[0]?.taxRate || 18,
+                        gst: docGst
+                    });
                 } else {
-                    // Aggregate B2C by POS and Rate
+                    // B2C Others (Table 7)
                     doc.items.forEach(item => {
                         const r = Number(item.taxRate || 18);
                         const key = `${pos}-${r}`;
-                        if (!b2cMap[key]) b2cMap[key] = { pos, rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
-                        const exRate = doc.exchangeRate || 1;
+                        if (!b2csMap[key]) b2csMap[key] = { pos, rt: r, txval: 0, iamt: 0, camt: 0, samt: 0 };
                         const txval = (item.qty * item.rate) * multiplier * exRate;
                         const tax = txval * (r / 100);
-                        b2cMap[key].txval += txval;
-                        if (pos !== this.doc.company.gstin.substring(0, 2) || (doc.currency && doc.currency !== 'INR')) {
-                            b2cMap[key].iamt += tax;
-                        } else {
-                            b2cMap[key].camt += tax / 2;
-                            b2cMap[key].samt += tax / 2;
+                        b2csMap[key].txval += txval;
+                        if (isInterstate) b2csMap[key].iamt += tax;
+                        else {
+                            b2csMap[key].camt += tax / 2;
+                            b2csMap[key].samt += tax / 2;
                         }
                     });
                 }
 
-                totalTaxable += (totals.subtotal * multiplier);
-                totalGst += (totals.tax * multiplier);
+                totalTaxable += docTaxable;
+                totalGst += docGst;
             });
 
             return {
                 b2b,
-                b2c: Object.values(b2cMap),
+                b2cl,
+                b2cs: Object.values(b2csMap),
+                exports,
                 hsnSummary: Object.values(hsnMap),
                 totalTaxable,
                 totalGst,
-                iamt: b2b.reduce((s, i) => s + i.iamt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.iamt, 0),
-                camt: b2b.reduce((s, i) => s + i.camt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.camt, 0),
-                samt: b2b.reduce((s, i) => s + i.samt, 0) + Object.values(b2cMap).reduce((s, i) => s + i.samt, 0),
+                iamt: b2b.reduce((s, i) => s + (i.itms.reduce((ss, ii) => ss + ii.iamt, 0)), 0) +
+                    b2cl.reduce((s, i) => s + i.gst, 0) +
+                    Object.values(b2csMap).reduce((s, i) => s + i.iamt, 0),
+                camt: b2b.reduce((s, i) => s + (i.itms.reduce((ss, ii) => ss + ii.camt, 0)), 0) +
+                    Object.values(b2csMap).reduce((s, i) => s + i.camt, 0),
+                samt: b2b.reduce((s, i) => s + (i.itms.reduce((ss, ii) => ss + ii.samt, 0)), 0) +
+                    Object.values(b2csMap).reduce((s, i) => s + i.samt, 0),
                 invoiceCount: docs.length
             };
         },
@@ -2370,10 +2494,12 @@ function billApp() {
                 });
             });
 
+            const exportValue = gstr1Data.exports.reduce((s, i) => s + i.value, 0);
+
             const portalData = {
                 table31: {
-                    a: { label: "Outward Taxable Supplies", val: gstr1Data.totalTaxable, tax: gstr1Data.totalGst },
-                    b: { label: "Outward Taxable Supplies (Zero Rated)", val: 0, tax: 0 },
+                    a: { label: "Outward Taxable Supplies", val: gstr1Data.totalTaxable - exportValue, tax: gstr1Data.totalGst },
+                    b: { label: "Outward Taxable Supplies (Zero Rated)", val: exportValue, tax: 0 },
                     c: { label: "Other Outward Supplies (Nil Rated, Exempted)", val: 0, tax: 0 },
                     d: { label: "Inward Supplies liable to Reverse Charge", val: 0, tax: 0 },
                     e: { label: "Non-GST Outward Supplies", val: 0, tax: 0 }
@@ -2403,18 +2529,137 @@ function billApp() {
             };
         },
 
+        async validateGstCompliance(doc) {
+            const errors = [];
+            const acc = doc.account || {};
+            const isExport = (doc.currency && doc.currency !== 'INR') || (acc.country && acc.country !== 'India');
+            const isB2B = !!acc.gstin;
+
+            // VAL_00: Duplicate Invoice Check
+            if (doc.type === 'Tax Invoice' && doc.number && !doc.number.includes('PREVIEW')) {
+                const { data: existing } = await window.supabase
+                    .from('documents')
+                    .select('id')
+                    .eq('number', doc.number)
+                    .neq('id', doc.id) // Exclude current doc if editing
+                    .maybeSingle();
+
+                if (existing) {
+                    errors.push(`VAL_00: Invoice number ${doc.number} already exists.`);
+                }
+            }
+
+            // VAL_01: Export/LUT GST Validation
+            const totals = this.getDocTotals(doc, true);
+            if (isExport && totals.tax > 0 && doc.supplyType === 'EXPORT_LUT') {
+                errors.push("VAL_01: Supply under LUT must have 0% GST.");
+            }
+
+            // VAL_02: B2B GSTIN Validation
+            if (isB2B && acc.gstin.length !== 15 && acc.country === 'India') {
+                errors.push("VAL_02: Indian B2B invoices require a valid 15-character GSTIN.");
+            }
+
+            // VAL_03: HSN/SAC Validation
+            const missingHsn = doc.items.some(item => !item.hsn || item.hsn.trim() === '');
+            if (missingHsn) {
+                errors.push("VAL_03: All line items must have a valid HSN/SAC code.");
+            }
+
+            // VAL_06: Mandatory State for India
+            if (acc.country === 'India' && (!acc.state || acc.state.trim() === '')) {
+                errors.push("VAL_06: State is mandatory for Indian customers.");
+            }
+
+            // VAL_07: Currency vs Country
+            if (acc.country === 'India' && doc.currency !== 'INR') {
+                errors.push("VAL_07: Indian customers must be billed in INR.");
+            }
+            if (acc.country !== 'India' && doc.currency === 'INR') {
+                errors.push("VAL_08: Foreign customers cannot be billed in INR.");
+            }
+
+            return {
+                valid: errors.length === 0,
+                errors: errors
+            };
+        },
+
+        getGstDashboardStats() {
+            // Refined stats using the new calculateGSTR1 logic (simulated for current date)
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            // This is synchronous in current implementation for dashboard preview
+            // We'll filter savedDocs manually here for immediate UI feedback
+            const docs = this.savedDocs.filter(d =>
+                (d.type === 'Tax Invoice' || d.type === 'Credit Note' || d.type === 'Debit Note')
+            );
+
+            let stats = {
+                b2bCount: 0,
+                b2cCount: 0,
+                totalTaxable: 0,
+                totalGst: 0,
+                exportCount: 0
+            };
+
+            docs.forEach(doc => {
+                const isExport = (doc.currency && doc.currency !== 'INR') || (doc.account && doc.account.country && doc.account.country !== 'India');
+                const isB2B = this.isB2B(doc.account);
+                const totals = this.getDocTotals(doc);
+                const multiplier = doc.type === 'Credit Note' ? -1 : 1;
+                const exRate = doc.exchangeRate || 1;
+
+                if (isExport) stats.exportCount++;
+                else if (isB2B) stats.b2bCount++;
+                else stats.b2cCount++;
+
+                stats.totalTaxable += totals.subtotal * multiplier * exRate;
+                stats.totalGst += totals.tax * multiplier * exRate;
+            });
+
+            return stats;
+        },
+
         updateComplianceHealth() {
-            // Logic to calculate compliance metrics based on savedDocs and gstHistory
-            const totalReturns = this.gstHistory.length;
-            if (totalReturns === 0) return;
+            // Data Integrity: Check all Tax Invoices for HSN and GSTIN validity
+            const taxInvoices = this.savedDocs.filter(d => d.type === 'Tax Invoice');
+            if (taxInvoices.length === 0) {
+                this.complianceStats.score = 100;
+                this.complianceStats.dataIntegrity = 100;
+                return;
+            }
 
-            // Simplified calculation for demonstration
-            const validGstins = this.masterData.accounts.filter(c => this.isValidGstin(c.gstin)).length;
-            const totalAccounts = this.masterData.accounts.length || 1;
-            this.complianceStats.dataIntegrity = Math.round((validGstins / totalAccounts) * 100);
+            let validCount = 0;
+            taxInvoices.forEach(doc => {
+                const validation = this.validateGstCompliance(doc);
+                if (validation.valid) validCount++;
+            });
 
-            // Score based on integrity and simulated punctuality
-            this.complianceStats.score = Math.round((this.complianceStats.dataIntegrity + this.complianceStats.punctuality + this.complianceStats.itcEfficiency) / 3);
+            this.complianceStats.dataIntegrity = Math.round((validCount / taxInvoices.length) * 100);
+
+            // Filing Punctuality: % of filings done before due date in history
+            const filings = this.gstHistory || [];
+            if (filings.length > 0) {
+                const onTime = filings.filter(f => f.status === 'Filed' && new Date(f.filed_at) <= new Date(f.due_date)).length;
+                this.complianceStats.punctuality = Math.round((onTime / filings.length) * 100);
+            } else {
+                this.complianceStats.punctuality = 100; // Fresh start
+            }
+
+            // ITC Efficiency: Ratio of valid purchase invoices (simulated)
+            const purchases = this.savedDocs.filter(d => d.type === 'Purchase Invoice');
+            const validPurchases = purchases.filter(p => this.isB2B(p.account)).length;
+            this.complianceStats.itcEfficiency = purchases.length > 0 ? Math.round((validPurchases / purchases.length) * 100) : 100;
+
+            // Final Weighted Score
+            this.complianceStats.score = Math.round(
+                (this.complianceStats.dataIntegrity * 0.4) +
+                (this.complianceStats.punctuality * 0.3) +
+                (this.complianceStats.itcEfficiency * 0.3)
+            );
         },
 
         async calculateCMP08(quarter, year) {
@@ -2464,18 +2709,24 @@ function billApp() {
             const table4 = {
                 b2b: {
                     txval: gstr1Data.b2b.reduce((s, i) => s + i.taxable, 0),
-                    iamt: gstr1Data.b2b.reduce((s, i) => s + i.iamt, 0),
-                    camt: gstr1Data.b2b.reduce((s, i) => s + i.camt, 0),
-                    samt: gstr1Data.b2b.reduce((s, i) => s + i.samt, 0)
+                    iamt: gstr1Data.b2b.reduce((s, i) => s + i.gst, 0), // Simplification: assuming IGST for B2B in aggregation
+                    camt: 0,
+                    samt: 0
                 },
-                b2c: {
-                    txval: gstr1Data.b2c.reduce((s, i) => s + i.txval, 0),
-                    iamt: gstr1Data.b2c.reduce((s, i) => s + i.iamt, 0),
-                    camt: gstr1Data.b2c.reduce((s, i) => s + i.camt, 0),
-                    samt: gstr1Data.b2c.reduce((s, i) => s + i.samt, 0)
+                b2cl: {
+                    txval: gstr1Data.b2cl.reduce((s, i) => s + i.taxable, 0),
+                    iamt: gstr1Data.b2cl.reduce((s, i) => s + i.gst, 0)
                 },
-                exports: { txval: 0, iamt: 0 }, // Placeholder for advanced export tracking
-                advances: { txval: 0, iamt: 0, camt: 0, samt: 0 }
+                b2cs: {
+                    txval: gstr1Data.b2cs.reduce((s, i) => s + i.txval, 0),
+                    iamt: gstr1Data.b2cs.reduce((s, i) => s + i.iamt, 0),
+                    camt: gstr1Data.b2cs.reduce((s, i) => s + i.camt, 0),
+                    samt: gstr1Data.b2cs.reduce((s, i) => s + i.samt, 0)
+                },
+                exports: {
+                    txval: gstr1Data.exports.reduce((s, i) => s + i.value, 0),
+                    iamt: 0
+                }
             };
 
             // Table 17: HSN Wise Summary of outward supplies
@@ -2492,7 +2743,7 @@ function billApp() {
                 itc: gstr3bData.itc,
                 invoiceCount: gstr1Data.invoiceCount,
                 b2bCount: gstr1Data.b2b.length,
-                b2cCount: gstr1Data.b2c.length,
+                b2cCount: gstr1Data.b2cl.length + gstr1Data.b2cs.length,
                 table4,
                 table17,
                 needsGstr9c: gstr1Data.totalTaxable > 50000000 // > 5 Crore
@@ -2503,15 +2754,17 @@ function billApp() {
             const frequency = this.gstSettings.filingFrequency;
             const dueDate = this.calculateGstDueDate(returnType, period, frequency);
 
-            const filing = {
-                user_id: this.user?.id,
-                return_type: returnType,
-                period,
-                frequency,
-                due_date: dueDate?.toISOString().split('T')[0],
-                filed_date: status === 'Filed' ? new Date().toISOString().split('T')[0] : null,
-                status,
-                data
+            const payload = {
+                user_id: this.user?.id, // Added user_id for consistency
+                return_type: returnType, // Renamed from 'type' to match existing schema
+                period: period,
+                status: status,
+                due_date: dueDate?.toISOString().split('T')[0], // Ensure ISO string format
+                filed_date: status === 'Filed' ? new Date().toISOString().split('T')[0] : null, // Renamed from 'filed_at'
+                data_snapshot: data, // Immutable snapshot for audit defense
+                taxable_value: data.totalTaxable || 0,
+                total_gst: data.totalGst || 0,
+                created_by: this.user?.id // Redundant if user_id is already there, but keeping for now
             };
 
             // Check if filing already exists
@@ -2528,14 +2781,14 @@ function billApp() {
                 // Update existing record
                 const result = await window.supabase
                     .from('gst_filings')
-                    .update(filing)
+                    .update(payload)
                     .eq('id', existing.id);
                 error = result.error;
             } else {
                 // Insert new record
                 const result = await window.supabase
                     .from('gst_filings')
-                    .insert(filing);
+                    .insert(payload);
                 error = result.error;
             }
 
@@ -2621,17 +2874,33 @@ function billApp() {
                 csvContent += `Total GST,${f(data.totalGst)}\n\n`;
 
                 csvContent += 'B2B Invoices\n';
-                csvContent += 'Invoice No,Date,Account PO No,Account PO Date,GSTIN,Account Name,Taxable Value,IGST,CGST,SGST,Total GST\n';
+                csvContent += 'Invoice No,Date,GSTIN,Account Name,PO Number,PO Date,Taxable Value,Total GST\n';
                 data.b2b.forEach(inv => {
-                    csvContent += `${inv.number},${inv.date},${inv.poNumber},${inv.poDate},${inv.gstin},${inv.name},${f(inv.taxable)},${f(inv.iamt || 0)},${f(inv.camt || 0)},${f(inv.samt || 0)},${f(inv.gst)}\n`;
+                    csvContent += `${inv.number},${inv.date},${inv.gstin},${inv.name},${inv.poNumber},${inv.poDate},${f(inv.taxable)},${f(inv.gst)}\n`;
                 });
 
-                csvContent += '\nSection 7 - B2C (Others) Aggregated\n';
+                if (data.b2cl && data.b2cl.length > 0) {
+                    csvContent += '\nSection 5 - B2C Large (Inter-state > 2.5L)\n';
+                    csvContent += 'Invoice No,Date,Place of Supply,Rate,Taxable Value,IGST\n';
+                    data.b2cl.forEach(inv => {
+                        csvContent += `${inv.number},${inv.date},${inv.pos},${inv.rt}%,${f(inv.taxable)},${f(inv.gst)}\n`;
+                    });
+                }
+
+                csvContent += '\nSection 7 - B2C Small (Aggregated)\n';
                 csvContent += 'Place of Supply,Rate,Taxable Value,IGST,CGST,SGST,Total GST\n';
-                data.b2c.forEach(row => {
+                data.b2cs.forEach(row => {
                     const totalGst = (row.iamt || 0) + (row.camt || 0) + (row.samt || 0);
                     csvContent += `${row.pos},${row.rt}%,${f(row.txval)},${f(row.iamt)},${f(row.camt)},${f(row.samt)},${f(totalGst)}\n`;
                 });
+
+                if (data.exports && data.exports.length > 0) {
+                    csvContent += '\nSection 6A - Exports / LUT\n';
+                    csvContent += 'Invoice No,Date,Value,Type,Shipping Bill,Shipping Date\n';
+                    data.exports.forEach(exp => {
+                        csvContent += `${exp.number},${exp.date},${f(exp.value)},${exp.type},${exp.shippingBill},${exp.shippingDate}\n`;
+                    });
+                }
 
                 if (data.hsnSummary) {
                     csvContent += '\nSection 12 - HSN Summary\n';

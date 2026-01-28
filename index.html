@@ -227,7 +227,7 @@
                     class="text-slate-600 hover:text-green-600 font-medium text-sm transition-colors flex items-center"
                     title="Save to History">
                     <i data-lucide="save" class="w-4 h-4 mr-1"></i>
-                    Save Draft
+                    <span x-text="doc.isPosted ? 'View History' : 'Save Draft'"></span>
                 </button>
 
 
@@ -236,8 +236,8 @@
                     class="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white px-6 py-2 rounded-lg transition-all font-bold shadow-lg shadow-blue-200 min-w-[160px] justify-center">
                     <template x-if="!isSaving">
                         <div class="flex items-center">
-                            <i data-lucide="download" class="w-4 h-4 mr-2"></i>
-                            <span>Save PDF</span>
+                            <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i>
+                            <span x-text="doc.isPosted ? 'Print PDF' : 'Post & Save PDF'"></span>
                         </div>
                     </template>
                     <template x-if="isSaving">
@@ -624,6 +624,17 @@
                                     <input type="date" x-model="ledgerControls.endDate"
                                         class="text-sm font-bold text-slate-600 outline-none bg-transparent">
                                 </div>
+
+                                <!-- Currency Tabs -->
+                                <div class="flex items-center p-1 bg-slate-50 rounded-2xl border border-slate-200">
+                                    <template x-for="curr in ['All', ...currencies.map(c => c.code)]" :key="curr">
+                                        <button @click="ledgerControls.currency = curr"
+                                            class="px-4 py-2 rounded-xl text-xs font-black transition-all"
+                                            :class="ledgerControls.currency === curr ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'"
+                                            x-text="curr">
+                                        </button>
+                                    </template>
+                                </div>
                             </div>
 
                             <div class="flex items-center space-x-3">
@@ -980,9 +991,9 @@
 
     <!-- GST Compliance Dashboard -->
     <div x-show="showGstDashboard" x-cloak style="display: none;"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm no-print p-4">
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm no-print">
 
-        <div class="bg-white w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        <div class="bg-white w-full h-full shadow-2xl flex flex-col overflow-hidden"
             @click.away="showGstDashboard = false" x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
             x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 scale-100"
@@ -1330,9 +1341,25 @@
                                                             class="p-3 bg-white/60 rounded-2xl border border-white/80 shadow-sm">
                                                             <p
                                                                 class="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1">
-                                                                B2C</p>
+                                                                B2C L</p>
                                                             <p class="text-sm font-black text-slate-900"
-                                                                x-text="calculatedData?.b2c?.length || 0"></p>
+                                                                x-text="calculatedData?.b2cl?.length || 0"></p>
+                                                        </div>
+                                                        <div
+                                                            class="p-3 bg-white/60 rounded-2xl border border-white/80 shadow-sm">
+                                                            <p
+                                                                class="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1">
+                                                                B2C S</p>
+                                                            <p class="text-sm font-black text-slate-900"
+                                                                x-text="calculatedData?.b2cs?.length || 0"></p>
+                                                        </div>
+                                                        <div
+                                                            class="p-3 bg-white/60 rounded-2xl border border-white/80 shadow-sm">
+                                                            <p
+                                                                class="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1">
+                                                                Exports</p>
+                                                            <p class="text-sm font-black text-slate-900"
+                                                                x-text="calculatedData?.exports?.length || 0"></p>
                                                         </div>
                                                     </div>
                                                     <div class="pt-4 border-t border-blue-100/50 space-y-2">
@@ -1698,33 +1725,102 @@
                                     </tbody>
                                 </table>
 
-                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Section 7 -
-                                    B2C (Others)</h4>
-                                <table class="w-full text-left border-collapse">
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Section 5 -
+                                    B2C Large (Inter-state > 2.5L)</h4>
+                                <table class="w-full text-left border-collapse mb-8">
                                     <thead>
                                         <tr
                                             class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
-                                            <th class="pb-3 px-2">Place of Supply</th>
-                                            <th class="pb-3 px-2">Rate (%)</th>
+                                            <th class="pb-3 px-2">Invoice No</th>
+                                            <th class="pb-3 px-2">Date</th>
+                                            <th class="pb-3 px-2">POS</th>
+                                            <th class="pb-3 px-2">Rate</th>
                                             <th class="pb-3 px-2 text-right">Taxable Value</th>
                                             <th class="pb-3 px-2 text-right">IGST</th>
-                                            <th class="pb-3 px-2 text-right">CGST</th>
-                                            <th class="pb-3 px-2 text-right">SGST</th>
                                         </tr>
                                     </thead>
                                     <tbody class="text-[11px] font-medium text-slate-700">
-                                        <template x-for="item in lastGstr1Result?.b2c || []">
+                                        <template x-for="item in lastGstr1Result?.b2cl || []">
+                                            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-2 font-black" x-text="item.number"></td>
+                                                <td class="py-3 px-2" x-text="formatDate(item.date)"></td>
+                                                <td class="py-3 px-2" x-text="item.pos"></td>
+                                                <td class="py-3 px-2" x-text="item.rt + '%'"></td>
+                                                <td class="py-3 px-2 text-right font-black"
+                                                    x-text="formatCurrency(item.taxable)"></td>
+                                                <td class="py-3 px-2 text-right text-blue-600"
+                                                    x-text="formatCurrency(item.gst)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 mt-8 tracking-widest">
+                                    Section 7 - B2C Small (Aggregated)</h4>
+                                <table class="w-full text-left border-collapse mb-8">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                            <th class="pb-3 px-2 text-[10px] font-black uppercase text-slate-500">Place
+                                                of Supply</th>
+                                            <th class="pb-3 px-2 text-[10px] font-black uppercase text-slate-500">Rate
+                                                (%)</th>
+                                            <th
+                                                class="pb-3 px-2 text-right text-[10px] font-black uppercase text-slate-500">
+                                                Taxable Value</th>
+                                            <th
+                                                class="pb-3 px-2 text-right text-[10px] font-black uppercase text-slate-500">
+                                                IGST</th>
+                                            <th
+                                                class="pb-3 px-2 text-right text-[10px] font-black uppercase text-slate-500">
+                                                CGST</th>
+                                            <th
+                                                class="pb-3 px-2 text-right text-[10px] font-black uppercase text-slate-500">
+                                                SGST</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-[11px] font-medium text-slate-700">
+                                        <template x-for="item in lastGstr1Result?.b2cs || []">
                                             <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                                                 <td class="py-3 px-2 font-bold" x-text="item.pos"></td>
                                                 <td class="py-3 px-2" x-text="item.rt + '%'"></td>
                                                 <td class="py-3 px-2 text-right font-bold"
                                                     x-text="formatCurrency(item.txval)"></td>
-                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.iamt)">
+                                                <td class="py-3 px-2 text-right font-black"
+                                                    x-text="formatCurrency(item.iamt)"></td>
+                                                <td class="py-3 px-2 text-right font-black"
+                                                    x-text="formatCurrency(item.camt)"></td>
+                                                <td class="py-3 px-2 text-right font-black"
+                                                    x-text="formatCurrency(item.samt)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+
+                                <h4 class="text-xs font-black uppercase text-slate-400 mb-4 mt-8 tracking-widest">
+                                    Section 6A - Exports (Zero Rated)</h4>
+                                <table class="w-full text-left border-collapse mb-8">
+                                    <thead>
+                                        <tr
+                                            class="text-[10px] font-black uppercase text-slate-500 border-b border-slate-100">
+                                            <th class="pb-3 px-2">Invoice No</th>
+                                            <th class="pb-3 px-2">Date</th>
+                                            <th class="pb-3 px-2">Value</th>
+                                            <th class="pb-3 px-2">Type</th>
+                                            <th class="pb-3 px-2">Shipping Bill</th>
+                                            <th class="pb-3 px-2">Shipping Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-[11px] font-medium text-slate-700">
+                                        <template x-for="item in lastGstr1Result?.exports || []">
+                                            <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-2 font-black" x-text="item.number"></td>
+                                                <td class="py-3 px-2" x-text="formatDate(item.date)"></td>
+                                                <td class="py-3 px-2 font-bold" x-text="formatCurrency(item.value)">
                                                 </td>
-                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.camt)">
-                                                </td>
-                                                <td class="py-3 px-2 text-right" x-text="formatCurrency(item.samt)">
-                                                </td>
+                                                <td class="py-3 px-2" x-text="item.type"></td>
+                                                <td class="py-3 px-2" x-text="item.shippingBill || 'N/A'"></td>
+                                                <td class="py-3 px-2" x-text="item.shippingDate || 'N/A'"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -2302,8 +2398,8 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1"
                                     x-text="doc.type === 'Quotation' ? 'Quotation Date' : (doc.type === 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))"></label>
-                                <input type="date" x-model="doc.date"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <input type="date" x-model="doc.date" :disabled="doc.isPosted"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50">
                             </div>
                         </div>
 
@@ -2311,32 +2407,37 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">Currency</label>
-                                <select x-model="doc.currency"
-                                    @change="lucide.createIcons(); if(doc.currency === 'INR') { doc.exchangeRate = 1; doc.bankChargesAmount = 0; }"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <select x-model="doc.currency" :disabled="doc.isPosted"
+                                    @change="lucide.createIcons(); if(doc.currency === 'INR') { doc.exchangeRate = 1; doc.bankChargesAmount = 0; } updateSupplyType(); ensureBankExists();"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50">
                                     <template x-for="curr in currencies" :key="curr.code">
                                         <option :value="curr.code"
                                             x-text="curr.code + ' - ' + curr.name + ' (' + curr.symbol + ')'"></option>
                                     </template>
                                 </select>
                             </div>
+                            <div
+                                x-show="doc.currency !== 'INR' && !['Quotation', 'Proforma Invoice'].includes(doc.type)">
+                                <label class="block text-sm font-medium text-slate-600 mb-1">Ex. Rate (1 FC = ?
+                                    INR)</label>
+                                <input type="number" x-model="doc.exchangeRate" step="0.01" :disabled="doc.isPosted"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 italic">
+                            </div>
                         </div>
 
-                        <!-- Export Type (Only for non-INR) -->
-                        <div x-show="doc.currency !== 'INR'">
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Export Type</label>
-                            <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                                <button @click="doc.exportType = 'Taxable'"
-                                    :class="doc.exportType === 'Taxable' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'"
-                                    class="flex-1 py-2 rounded-lg text-xs font-bold transition-all">
-                                    Taxable (IGST)
-                                </button>
-                                <button @click="doc.exportType = 'LUT'"
-                                    :class="doc.exportType === 'LUT' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'"
-                                    class="flex-1 py-2 rounded-lg text-xs font-bold transition-all">
-                                    Under LUT (0%)
-                                </button>
+                        <!-- Supply Type Indicator -->
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Supply Type
+                                (Auto-derived)</label>
+                            <div class="flex items-center space-x-2">
+                                <div class="w-2 h-2 rounded-full"
+                                    :class="doc.supplyType === 'EXPORT_LUT' ? 'bg-amber-500' : 'bg-blue-600'"></div>
+                                <span class="text-xs font-black text-slate-700"
+                                    x-text="doc.supplyType.replace('_', ' ')"></span>
                             </div>
+                            <p x-show="doc.supplyType === 'EXPORT_LUT'"
+                                class="text-[10px] text-amber-600 font-bold mt-2 italic"
+                                x-text="'\"' + getExportRemark() + ' \"'"></p>
                         </div>
 
                         <!-- Print Settings -->
@@ -2440,12 +2541,24 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">State</label>
-                                <input type="text" x-model="doc.account.state"
+                                <input type="text" x-model="doc.account.state" @input="updateSupplyType()"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
                             <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1">Country</label>
+                                <select x-model="doc.account.country" @change="updateSupplyType()"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="India">India</option>
+                                    <option value="USA">USA</option>
+                                    <option value="UAE">UAE</option>
+                                    <option value="UK">UK</option>
+                                    <option value="Qatar">Qatar</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">GSTIN</label>
-                                <input type="text" x-model="doc.account.gstin"
+                                <input type="text" x-model="doc.account.gstin" @input="updateSupplyType()"
                                     :class="!doc.account.gstin || isValidGstin(doc.account.gstin) ? 'border-slate-200 focus:ring-blue-500' : 'border-red-500 focus:ring-red-500'"
                                     class="w-full border rounded-lg px-3 py-2 text-slate-700 outline-none text-xs">
                             </div>
@@ -2763,7 +2876,8 @@
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-600 mb-1">Acc. Number</label>
+                            <label class="block text-sm font-medium text-slate-600 mb-1"
+                                x-text="doc.currency === 'EUR' ? 'IBAN' : 'Acc. Number'"></label>
                             <input type="text" x-model="doc.banks[doc.currency].acc"
                                 class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
@@ -2774,7 +2888,8 @@
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-600 mb-1">IFSC Code</label>
+                                <label class="block text-sm font-medium text-slate-600 mb-1"
+                                    x-text="['USD','EUR'].includes(doc.currency) ? 'SWIFT Code' : 'IFSC Code'"></label>
                                 <input type="text" x-model="doc.banks[doc.currency].ifsc"
                                     class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             </div>
@@ -3070,13 +3185,16 @@
                                     <div class="p-2 text-[10px] grid grid-cols-2 gap-y-1">
                                         <div class="font-bold">Name</div>
                                         <div x-text="bankForCurrency().name"></div>
-                                        <div class="font-bold">Acc. Number</div>
+                                        <div class="font-bold" x-text="doc.currency === 'EUR' ? 'IBAN' : 'Acc. Number'">
+                                        </div>
                                         <div x-text="bankForCurrency().acc"></div>
                                         <div class="font-bold">Bank</div>
                                         <div x-text="bankForCurrency().bankName"></div>
                                         <div class="font-bold">Branch</div>
                                         <div x-text="bankForCurrency().branch"></div>
-                                        <div class="font-bold">IFSC Code</div>
+                                        <div class="font-bold"
+                                            x-text="['USD','EUR'].includes(doc.currency) ? 'SWIFT Code' : 'IFSC Code'">
+                                        </div>
                                         <div x-text="bankForCurrency().ifsc"></div>
                                     </div>
                                 </div>
@@ -3621,9 +3739,40 @@
                                         </div>
                                     </div>
 
+                                    <div class="grid grid-cols-2 gap-8">
+                                        <div class="space-y-3">
+                                            <label
+                                                class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Country</label>
+                                            <select x-model="accountForm.country"
+                                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                                <option value="India">India</option>
+                                                <option value="USA">United States</option>
+                                                <option value="UK">United Kingdom</option>
+                                                <option value="Germany">Germany</option>
+                                                <option value="France">France</option>
+                                                <option value="Singapore">Singapore</option>
+                                                <option value="UAE">UAE</option>
+                                                <option value="Qatar">Qatar</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <label
+                                                class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Default
+                                                Currency</label>
+                                            <select x-model="accountForm.currency"
+                                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
+                                                <option value="INR">INR (₹)</option>
+                                                <option value="USD">USD ($)</option>
+                                                <option value="EUR">EUR (€)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <div class="space-y-3">
                                         <label
-                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">State</label>
+                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">State
+                                            (Mandatory for India)</label>
                                         <input type="text" x-model="accountForm.state"
                                             class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all">
                                     </div>
@@ -3810,19 +3959,38 @@
                                         </div>
                                     </div>
 
-                                    <div class="space-y-3">
-                                        <label
-                                            class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">GST
-                                            Rate (%)</label>
-                                        <div class="relative">
-                                            <select x-model="prodForm.taxRate"
-                                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer">
-                                                <template x-for="slab in allowedTaxSlabs" :key="slab">
-                                                    <option :value="slab" x-text="slab + '%'"></option>
-                                                </template>
-                                            </select>
-                                            <i data-lucide="chevron-down"
-                                                class="w-5 h-5 absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                    <div class="grid grid-cols-2 gap-8">
+                                        <div class="space-y-3">
+                                            <label
+                                                class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Item
+                                                Type</label>
+                                            <div class="flex bg-slate-100 p-1.5 rounded-3xl border border-slate-200">
+                                                <button @click="prodForm.type = 'GOODS'"
+                                                    :class="prodForm.type === 'GOODS' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'"
+                                                    class="flex-1 py-3 rounded-2xl text-xs font-black transition-all">
+                                                    GOODS
+                                                </button>
+                                                <button @click="prodForm.type = 'SERVICES'"
+                                                    :class="prodForm.type === 'SERVICES' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'"
+                                                    class="flex-1 py-3 rounded-2xl text-xs font-black transition-all">
+                                                    SERVICES
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="space-y-3">
+                                            <label
+                                                class="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">GST
+                                                Rate (%)</label>
+                                            <div class="relative">
+                                                <select x-model="prodForm.taxRate"
+                                                    class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer">
+                                                    <template x-for="slab in allowedTaxSlabs" :key="slab">
+                                                        <option :value="slab" x-text="slab + '%'"></option>
+                                                    </template>
+                                                </select>
+                                                <i data-lucide="chevron-down"
+                                                    class="w-5 h-5 absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                                            </div>
                                         </div>
                                     </div>
 
