@@ -1072,7 +1072,7 @@
                 <template x-if="gstView === 'returns'">
                     <div class="space-y-6">
                         <!-- Summary Cards -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                             <!-- Total Taxable Value -->
                             <div
                                 class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
@@ -1150,6 +1150,27 @@
                                         B2C Invoices</p>
                                 </div>
                                 <h3 class="text-2xl font-black text-slate-900" x-text="getGstDashboardStats().b2cCount">
+                                </h3>
+                            </div>
+
+                            <!-- Export Invoices -->
+                            <div
+                                class="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
+                                <div
+                                    class="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                                    <i data-lucide="plane" class="w-24 h-24"></i>
+                                </div>
+                                <div class="flex items-center space-x-3 mb-4">
+                                    <div
+                                        class="p-2 bg-cyan-50 rounded-xl group-hover:bg-cyan-600 group-hover:text-white transition-colors">
+                                        <i data-lucide="plane" class="w-4 h-4 text-cyan-600 group-hover:text-white"></i>
+                                    </div>
+                                    <p
+                                        class="text-slate-400 text-[10px] font-black uppercase tracking-widest transition-colors group-hover:text-cyan-600">
+                                        Export Invoices</p>
+                                </div>
+                                <h3 class="text-2xl font-black text-slate-900"
+                                    x-text="getGstDashboardStats().exportCount">
                                 </h3>
                             </div>
                         </div>
@@ -1710,7 +1731,8 @@
                                                 <td class="py-4 px-2 text-slate-500" x-text="formatDate(item.date)">
                                                 </td>
                                                 <td class="py-4 px-2 font-bold text-blue-600"
-                                                    x-text="item.poNumber || '-'"></td>
+                                                    x-text="item.poNumber || '-'">
+                                                </td>
                                                 <td class="py-4 px-2 text-slate-500"
                                                     x-text="item.poDate ? formatDate(item.poDate) : '-'"></td>
                                                 <td class="py-4 px-2 font-medium" x-text="item.name"></td>
