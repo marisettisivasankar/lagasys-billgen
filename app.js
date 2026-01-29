@@ -1291,6 +1291,11 @@ function billApp() {
             return this.doc.banks[currency];
         },
 
+        sanitizeDate(val) {
+            if (val === undefined || val === null || val === '') return null;
+            return val;
+        },
+
         formatDate(dateStr) {
             if (!dateStr) return '';
             // Handle ISO timestamps from Supabase
@@ -1398,7 +1403,7 @@ function billApp() {
                     type: this.doc.type,
                     number: finalNumber,
                     revision: this.doc.revision || 0,
-                    date: this.doc.date,
+                    date: this.sanitizeDate(this.doc.date),
                     currency: this.doc.currency,
                     exchangeRate: this.doc.exchangeRate || 1,
                     supplyType: this.doc.supplyType || 'DOMESTIC_B2C',
@@ -1412,16 +1417,21 @@ function billApp() {
                         total: this.grandTotal()
                     },
                     poNumber: this.doc.poNumber || '',
-                    poDate: this.doc.poDate || '',
+                    poDate: this.doc.poDate || '', // TEXT in DB
                     boeNumber: this.doc.boeNumber || '',
-                    boeDate: this.doc.boeDate || '',
+                    boeDate: this.sanitizeDate(this.doc.boeDate),
                     portCode: this.doc.portCode || '',
                     isRcm: !!this.doc.isRcm,
                     itcEligibility: this.doc.itcEligibility || 'Inputs',
                     tnc: this.doc.tnc,
                     settings: this.doc.settings,
                     status: 'FINAL',
-                    created_by: this.user?.id
+                    created_by: this.user?.id,
+                    originalInvoiceNo: this.doc.originalInvoiceNo || '',
+                    originalInvoiceDate: this.sanitizeDate(this.doc.originalInvoiceDate),
+                    reasonForIssue: this.doc.reasonForIssue || '',
+                    dueDate: this.sanitizeDate(this.doc.dueDate),
+                    validityDate: this.sanitizeDate(this.doc.validityDate)
                 };
 
                 const { error: saveError } = await window.supabase.from('documents').insert(payload);
@@ -2627,7 +2637,13 @@ function billApp() {
                     number: draftNumber,
                     status: 'DRAFT',
                     isPosted: false,
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    // Sanitize dates for DB
+                    date: this.sanitizeDate(this.doc.date),
+                    boeDate: this.sanitizeDate(this.doc.boeDate),
+                    originalInvoiceDate: this.sanitizeDate(this.doc.originalInvoiceDate),
+                    dueDate: this.sanitizeDate(this.doc.dueDate),
+                    validityDate: this.sanitizeDate(this.doc.validityDate)
                 };
 
                 const { error } = await window.supabase.from('documents').upsert(payload);
