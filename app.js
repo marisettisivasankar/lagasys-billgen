@@ -130,22 +130,6 @@ function billApp() {
                 applicableTo: ['Composition'],
                 frequencies: ['Quarterly'],
                 dueDayQuarterly: 18
-            },
-            {
-                code: 'GSTR-9',
-                name: 'GSTR-9',
-                description: 'Annual return for regular taxpayers',
-                applicableTo: ['Regular'],
-                frequencies: ['Annual'],
-                dueDateAnnual: { month: 12, day: 31 } // 31st December of following FY
-            },
-            {
-                code: 'GSTR-9C',
-                name: 'GSTR-9C',
-                description: 'Annual reconciliation statement (> ₹5 Crore)',
-                applicableTo: ['Regular'],
-                frequencies: ['Annual'],
-                dueDateAnnual: { month: 12, day: 31 }
             }
         ],
         gstFilings: [], // Will store filing records from Supabase
@@ -209,6 +193,9 @@ function billApp() {
             originalInvoiceNo: '',
             originalInvoiceDate: '',
             reasonForIssue: '',
+            isExempt: false,
+            isNilRated: false,
+            isNonGst: false,
 
             account: {
                 name: '',
@@ -1664,6 +1651,7 @@ function billApp() {
                 const docDate = new Date(d.date);
                 return (
                     (d.type === 'Tax Invoice' ||
+                        d.type === 'Purchase Invoice' ||
                         d.type === 'Credit Note' ||
                         d.type === 'Debit Note') &&
                     docDate >= fyStartDate && docDate <= fyEndDate
@@ -1674,26 +1662,30 @@ function billApp() {
             let b2cCount = 0;
             let totalTaxable = 0;
             let totalGst = 0;
+            let totalItc = 0;
 
             docs.forEach(doc => {
                 const isB2B = this.isB2B(doc.account);
-                if (isB2B) b2bCount++; else b2cCount++;
-
                 const docStats = this.getDocTotals(doc);
                 const exRate = doc.exchangeRate || 1;
                 const taxable = docStats.subtotal * exRate;
                 const gst = docStats.tax * exRate;
 
-                if (doc.type === 'Credit Note') {
-                    totalTaxable -= taxable;
-                    totalGst -= gst;
+                if (doc.type === 'Purchase Invoice') {
+                    totalItc += gst;
                 } else {
-                    totalTaxable += taxable;
-                    totalGst += gst;
+                    if (isB2B) b2bCount++; else b2cCount++;
+                    if (doc.type === 'Credit Note') {
+                        totalTaxable -= taxable;
+                        totalGst -= gst;
+                    } else {
+                        totalTaxable += taxable;
+                        totalGst += gst;
+                    }
                 }
             });
 
-            return { b2bCount, b2cCount, totalTaxable, totalGst };
+            return { b2bCount, b2cCount, totalTaxable, totalGst, totalItc };
         },
 
         updateExecutiveStats() {
@@ -2274,7 +2266,7 @@ function billApp() {
             docs.forEach(doc => {
                 const isCreditNote = doc.type === 'Credit Note';
                 const multiplier = isCreditNote ? -1 : 1;
-                const isIGST = this.isIGST(doc.account.gstin);
+                const isIGST = this.isIGST(doc);
 
                 doc.items.forEach(item => {
                     if (!item.hsn) return;
@@ -2297,6 +2289,221 @@ function billApp() {
             });
 
             return Object.values(hsnMap);
+        },
+
+        getHsnMonthlySummary(fiscalYear) {
+            if (!fiscalYear) fiscalYear = this.selectedFY;
+            if (!fiscalYear) return { months: [], hsnSummary: [], monthlyTotals: [], grandTotal: {} };
+
+            const years = fiscalYear.split('-');
+            const startYear = parseInt(years[0]);
+            const endYear = startYear + 1;
+
+            const startDate = `${startYear}-04-01`;
+            const endDate = `${endYear}-03-31`;
+
+            const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+            const hsnMap = {};
+            const monthlyTotals = months.map(() => ({ taxable: 0, igst: 0, cgst: 0, sgst: 0 }));
+
+            const docs = this.savedDocs.filter(d =>
+                (d.type === 'Tax Invoice' || d.type === 'Credit Note' || d.type === 'Debit Note') &&
+                d.date >= startDate &&
+                d.date <= endDate
+            );
+
+
+            docs.forEach(doc => {
+                const docDate = new Date(doc.date);
+                let monthIdx = docDate.getMonth() - 3; // Apr is 3, index 0
+                if (monthIdx < 0) monthIdx += 12;
+
+                const multiplier = doc.type === 'Credit Note' ? -1 : 1;
+                const exRate = Number(doc.exchangeRate || 1);
+                const isIGST = this.isIGST(doc);
+
+                // Determine if this is an export invoice
+                const isExport = doc.supplyType === 'EXPORT_LUT' || doc.supplyType === 'EXPORT_WPAY' ||
+                    (doc.account && doc.account.country && doc.account.country !== 'India');
+
+                // Track which HSNs are in this invoice to count invoice only once per HSN
+                const hsnInThisDoc = new Set();
+
+                doc.items.forEach(item => {
+                    const hsn = item.hsn || '999999';
+                    // Create composite key: HSN-EXPORT or HSN-DOMESTIC
+                    const hsnKey = isExport ? `${hsn}-EXPORT` : `${hsn}-DOMESTIC`;
+
+                    if (!hsnMap[hsnKey]) {
+                        hsnMap[hsnKey] = {
+                            code: hsn,
+                            type: isExport ? 'Export' : 'Domestic',
+                            months: months.map(() => ({ count: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 })),
+                            total: { count: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 }
+                        };
+                    }
+
+                    const taxable = (item.qty * item.rate) * multiplier * exRate;
+                    // For exports under LUT, tax is 0. For exports with payment, use item.taxRate
+                    const isLutExport = doc.supplyType === 'EXPORT_LUT';
+                    const tax = isLutExport ? 0 : (taxable * (item.taxRate / 100));
+
+                    const mData = hsnMap[hsnKey].months[monthIdx];
+
+                    // Count invoice only once per HSN (even if multiple line items with same HSN)
+                    if (!hsnInThisDoc.has(hsnKey)) {
+                        mData.count += (1 * multiplier);
+                        hsnMap[hsnKey].total.count += (1 * multiplier);
+                        hsnInThisDoc.add(hsnKey);
+                    }
+
+                    // But aggregate all financial values
+                    mData.taxable += taxable;
+
+                    if (isIGST) mData.igst += tax;
+                    else {
+                        mData.cgst += tax / 2;
+                        mData.sgst += tax / 2;
+                    }
+
+                    // Update HSN Total (financial values)
+                    hsnMap[hsnKey].total.taxable += taxable;
+                    if (isIGST) hsnMap[hsnKey].total.igst += tax;
+                    else {
+                        hsnMap[hsnKey].total.cgst += tax / 2;
+                        hsnMap[hsnKey].total.sgst += tax / 2;
+                    }
+
+                    // Update Monthly Grand Totals
+                    monthlyTotals[monthIdx].taxable += taxable;
+                    if (isIGST) monthlyTotals[monthIdx].igst += tax;
+                    else {
+                        monthlyTotals[monthIdx].cgst += tax / 2;
+                        monthlyTotals[monthIdx].sgst += tax / 2;
+                    }
+                });
+            });
+
+
+
+            return {
+                months,
+                hsnSummary: Object.values(hsnMap).sort((a, b) => a.code.localeCompare(b.code)),
+                monthlyTotals,
+                grandTotal: monthlyTotals.reduce((acc, curr) => ({
+                    taxable: acc.taxable + curr.taxable,
+                    igst: acc.igst + curr.igst,
+                    cgst: acc.cgst + curr.cgst,
+                    sgst: acc.sgst + curr.sgst
+                }), { taxable: 0, igst: 0, cgst: 0, sgst: 0 })
+            };
+        },
+
+        exportHsnSummaryExcel(fiscalYear) {
+            const data = this.getHsnMonthlySummary(fiscalYear);
+            const workbook = XLSX.utils.book_new();
+
+            // 1. Summary Sheet (HSN vs Months Count)
+            const summaryRows = data.hsnSummary.map(h => {
+                const row = {
+                    "HSN Code": h.code,
+                    "Type": h.type
+                };
+                data.months.forEach((m, i) => {
+                    row[m] = h.months[i].count;
+                });
+                row["Total"] = h.total.count;
+                return row;
+            });
+
+            // Add Grand Total row for summary
+            const summaryTotal = { "HSN Code": "Total" };
+            data.months.forEach((m, i) => {
+                summaryTotal[m] = data.hsnSummary.reduce((sum, h) => sum + h.months[i].count, 0);
+            });
+            summaryTotal["Total"] = data.hsnSummary.reduce((sum, h) => sum + h.total.count, 0);
+            summaryRows.push(summaryTotal);
+
+            const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+            XLSX.utils.book_append_sheet(workbook, wsSummary, "Count Summary");
+
+            // 2. Detailed Sheet (Matching User Screenshot Layout)
+            const detailedRows = [];
+
+            data.hsnSummary.forEach(h => {
+                // Header row for HSN with counts
+                const headerRow = {
+                    "HSN Code": `${h.code} (${h.type})`
+                };
+                data.months.forEach((m, i) => {
+                    headerRow[m] = h.months[i].count;
+                });
+                headerRow["Total"] = h.total.count;
+                detailedRows.push(headerRow);
+
+                // Taxable Value row
+                const taxableRow = { "HSN Code": "Taxable" };
+                data.months.forEach((m, i) => {
+                    taxableRow[m] = h.months[i].taxable;
+                });
+                taxableRow["Total"] = h.total.taxable;
+                detailedRows.push(taxableRow);
+
+                // IGST row
+                const igstRow = { "HSN Code": "IGST" };
+                data.months.forEach((m, i) => {
+                    igstRow[m] = h.months[i].igst;
+                });
+                igstRow["Total"] = h.total.igst;
+                detailedRows.push(igstRow);
+
+                // CGST row
+                const cgstRow = { "HSN Code": "CGST" };
+                data.months.forEach((m, i) => {
+                    cgstRow[m] = h.months[i].cgst;
+                });
+                cgstRow["Total"] = h.total.cgst;
+                detailedRows.push(cgstRow);
+
+                // SGST row
+                const sgstRow = { "HSN Code": "SGST" };
+                data.months.forEach((m, i) => {
+                    sgstRow[m] = h.months[i].sgst;
+                });
+                sgstRow["Total"] = h.total.sgst;
+                detailedRows.push(sgstRow);
+
+                detailedRows.push({}); // Spacer row
+            });
+
+            // Grand Totals at bottom
+            const totalTaxableRow = { "HSN Code": "Total Taxable" };
+            const totalIgstRow = { "HSN Code": "Total IGST" };
+            const totalCgstRow = { "HSN Code": "Total CGST" };
+            const totalSgstRow = { "HSN Code": "Total SGST" };
+
+            data.months.forEach((m, i) => {
+                totalTaxableRow[m] = data.monthlyTotals[i].taxable;
+                totalIgstRow[m] = data.monthlyTotals[i].igst;
+                totalCgstRow[m] = data.monthlyTotals[i].cgst;
+                totalSgstRow[m] = data.monthlyTotals[i].sgst;
+            });
+
+            totalTaxableRow["Total"] = data.grandTotal.taxable;
+            totalIgstRow["Total"] = data.grandTotal.igst;
+            totalCgstRow["Total"] = data.grandTotal.cgst;
+            totalSgstRow["Total"] = data.grandTotal.sgst;
+
+            detailedRows.push(totalTaxableRow);
+            detailedRows.push(totalIgstRow);
+            detailedRows.push(totalCgstRow);
+            detailedRows.push(totalSgstRow);
+
+            const wsDetailed = XLSX.utils.json_to_sheet(detailedRows);
+            XLSX.utils.book_append_sheet(workbook, wsDetailed, "HSN Financial Summary");
+
+            XLSX.writeFile(workbook, `HSN_Full_Summary_${fiscalYear || this.selectedFY}.xlsx`);
+            this.notify('Detailed HSN Summary exported to Excel', 'success');
         },
 
         isIGST(doc) {
@@ -2893,61 +3100,6 @@ function billApp() {
             };
         },
 
-        async calculateGSTR9(financialYear) {
-            // Annual return - summary of all GSTR-1 and GSTR-3B
-            // Financial Year format: 'FY2025-26'
-            const fyYear = parseInt(financialYear.split('-')[0].replace('FY', ''));
-            const startDate = `${fyYear}-04-01`;
-            const endDate = `${fyYear + 1}-03-31`;
-
-            const gstr1Data = await this.calculateGSTR1(startDate, endDate);
-            const gstr3bData = await this.calculateGSTR3B(startDate, endDate);
-
-            // GSTR-9 specific tables aggregation
-            // Table 4: Details of outward and inward supplies on which tax is payable
-            const table4 = {
-                b2b: {
-                    txval: gstr1Data.b2b.reduce((s, i) => s + i.taxable, 0),
-                    iamt: gstr1Data.b2b.reduce((s, i) => s + i.gst, 0), // Simplification: assuming IGST for B2B in aggregation
-                    camt: 0,
-                    samt: 0
-                },
-                b2cl: {
-                    txval: gstr1Data.b2cl.reduce((s, i) => s + i.taxable, 0),
-                    iamt: gstr1Data.b2cl.reduce((s, i) => s + i.gst, 0)
-                },
-                b2cs: {
-                    txval: gstr1Data.b2cs.reduce((s, i) => s + i.txval, 0),
-                    iamt: gstr1Data.b2cs.reduce((s, i) => s + i.iamt, 0),
-                    camt: gstr1Data.b2cs.reduce((s, i) => s + i.camt, 0),
-                    samt: gstr1Data.b2cs.reduce((s, i) => s + i.samt, 0)
-                },
-                exports: {
-                    txval: gstr1Data.exports.reduce((s, i) => s + i.value, 0),
-                    iamt: 0
-                }
-            };
-
-            // Table 17: HSN Wise Summary of outward supplies
-            const table17 = gstr1Data.hsnSummary;
-
-            return {
-                financialYear,
-                period: financialYear,
-                annualTurnover: gstr1Data.totalTaxable,
-                annualGst: gstr1Data.totalGst,
-                iamt: gstr1Data.iamt,
-                camt: gstr1Data.camt,
-                samt: gstr1Data.samt,
-                itc: gstr3bData.itc,
-                invoiceCount: gstr1Data.invoiceCount,
-                b2bCount: gstr1Data.b2b.length,
-                b2cCount: gstr1Data.b2cl.length + gstr1Data.b2cs.length,
-                table4,
-                table17,
-                needsGstr9c: gstr1Data.totalTaxable > 50000000 // > 5 Crore
-            };
-        },
 
         async saveGstFiling(returnType, period, data, status = 'Pending') {
             const frequency = this.gstSettings.filingFrequency;
@@ -3123,27 +3275,6 @@ function billApp() {
                 csvContent += `Turnover,${f(data.turnover)}\n`;
                 csvContent += `Tax Rate,${data.taxRate}%\n`;
                 csvContent += `Tax Payable,${f(data.taxPayable)}\n`;
-            } else if (returnType === 'GSTR-9') {
-                csvContent = 'GSTR-9 Annual Summary\n\n';
-                csvContent += `Financial Year,${period}\n`;
-                csvContent += `Annual Turnover,${f(data.annualTurnover)}\n`;
-                csvContent += `Annual GST,${f(data.annualGst)}\n`;
-                csvContent += `Total Invoices,${data.invoiceCount}\n`;
-                csvContent += `B2B Count,${data.b2bCount}\n`;
-                csvContent += `B2C Count,${data.b2cCount}\n\n`;
-
-                csvContent += 'Table 4 - Outward Supplies on which tax is payable\n';
-                csvContent += 'Nature of Supply,Taxable Value,IGST,CGST,SGST\n';
-                csvContent += `B2B,${f(data.table4.b2b.txval)},${f(data.table4.b2b.iamt)},${f(data.table4.b2b.camt)},${f(data.table4.b2b.samt)}\n`;
-                csvContent += `B2C,${f(data.table4.b2c.txval)},${f(data.table4.b2c.iamt)},${f(data.table4.b2c.camt)},${f(data.table4.b2c.samt)}\n\n`;
-
-                if (data.table17) {
-                    csvContent += 'Table 17 - HSN Summary\n';
-                    csvContent += 'HSN/SAC,UQC,Quantity,Taxable Value,IGST,CGST,SGST\n';
-                    data.table17.forEach(h => {
-                        csvContent += `${h.hsn},${h.uqc},${h.qty},${f(h.txval)},${f(h.iamt)},${f(h.camt)},${f(h.samt)}\n`;
-                    });
-                }
             }
 
             const blob = new Blob([csvContent], { type: 'text/csv' });
