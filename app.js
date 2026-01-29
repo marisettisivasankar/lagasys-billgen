@@ -2212,6 +2212,8 @@ function billApp() {
             const hsnData = hsn.map(h => ({
                 "HSN/SAC": h.hsn,
                 "Description": h.desc,
+                "Type": h.type,
+                "Rate": h.rate + "%",
                 "UQC": "NOS",
                 "Total Quantity": h.qty,
                 "Taxable Value": h.taxable,
@@ -2267,23 +2269,40 @@ function billApp() {
                 const isCreditNote = doc.type === 'Credit Note';
                 const multiplier = isCreditNote ? -1 : 1;
                 const isIGST = this.isIGST(doc);
+                const isExport = doc.supplyType === 'EXPORT_LUT' || doc.supplyType === 'EXPORT_WPAY' ||
+                    (doc.account && doc.account.country && doc.account.country !== 'India');
 
                 doc.items.forEach(item => {
-                    if (!item.hsn) return;
-                    if (!hsnMap[item.hsn]) {
-                        hsnMap[item.hsn] = { hsn: item.hsn, desc: item.desc, qty: 0, taxable: 0, total: 0, iamt: 0, camt: 0, samt: 0 };
+                    const hsn = item.hsn || '999999';
+                    const rate = Number(item.taxRate || 18);
+                    const type = isExport ? 'Export' : 'Domestic';
+                    const hsnKey = `${hsn}-${rate}-${type}`;
+
+                    if (!hsnMap[hsnKey]) {
+                        hsnMap[hsnKey] = {
+                            hsn: hsn,
+                            desc: item.desc,
+                            rate: rate,
+                            type: type,
+                            qty: 0,
+                            taxable: 0,
+                            total: 0,
+                            iamt: 0,
+                            camt: 0,
+                            samt: 0
+                        };
                     }
                     const taxable = (item.qty * item.rate) * multiplier;
-                    const tax = (taxable * (item.taxRate / 100));
+                    const tax = (taxable * (rate / 100));
 
-                    hsnMap[item.hsn].qty += (item.qty * multiplier);
-                    hsnMap[item.hsn].taxable += taxable;
-                    hsnMap[item.hsn].total += (taxable + tax);
+                    hsnMap[hsnKey].qty += (item.qty * multiplier);
+                    hsnMap[hsnKey].taxable += taxable;
+                    hsnMap[hsnKey].total += (taxable + tax);
 
-                    if (isIGST) hsnMap[item.hsn].iamt += tax;
+                    if (isIGST) hsnMap[hsnKey].iamt += tax;
                     else {
-                        hsnMap[item.hsn].camt += tax / 2;
-                        hsnMap[item.hsn].samt += tax / 2;
+                        hsnMap[hsnKey].camt += tax / 2;
+                        hsnMap[hsnKey].samt += tax / 2;
                     }
                 });
             });
@@ -2331,15 +2350,17 @@ function billApp() {
 
                 doc.items.forEach(item => {
                     const hsn = item.hsn || '999999';
-                    // Create composite key: HSN-EXPORT or HSN-DOMESTIC
-                    const hsnKey = isExport ? `${hsn}-EXPORT` : `${hsn}-DOMESTIC`;
+                    const rate = Number(item.taxRate || 18);
+                    // Create composite key: HSN-RATE-EXPORT or HSN-RATE-DOMESTIC
+                    const hsnKey = `${hsn}-${rate}-${isExport ? 'EXPORT' : 'DOMESTIC'}`;
 
                     if (!hsnMap[hsnKey]) {
                         hsnMap[hsnKey] = {
                             code: hsn,
+                            rate: rate,
                             type: isExport ? 'Export' : 'Domestic',
-                            months: months.map(() => ({ count: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 })),
-                            total: { count: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 }
+                            months: months.map(() => ({ qty: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 })),
+                            total: { qty: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0 }
                         };
                     }
 
@@ -2350,12 +2371,10 @@ function billApp() {
 
                     const mData = hsnMap[hsnKey].months[monthIdx];
 
-                    // Count invoice only once per HSN (even if multiple line items with same HSN)
-                    if (!hsnInThisDoc.has(hsnKey)) {
-                        mData.count += (1 * multiplier);
-                        hsnMap[hsnKey].total.count += (1 * multiplier);
-                        hsnInThisDoc.add(hsnKey);
-                    }
+                    // Strictly sum quantities from line items
+                    const itemQty = Number(item.qty || 1) * multiplier;
+                    mData.qty += itemQty;
+                    hsnMap[hsnKey].total.qty += itemQty;
 
                     // But aggregate all financial values
                     mData.taxable += taxable;
@@ -2403,42 +2422,43 @@ function billApp() {
             const data = this.getHsnMonthlySummary(fiscalYear);
             const workbook = XLSX.utils.book_new();
 
-            // 1. Summary Sheet (HSN vs Months Count)
+            // 1. Summary Sheet (HSN vs Months Quantity)
             const summaryRows = data.hsnSummary.map(h => {
                 const row = {
                     "HSN Code": h.code,
+                    "GST Rate": h.rate + "%",
                     "Type": h.type
                 };
                 data.months.forEach((m, i) => {
-                    row[m] = h.months[i].count;
+                    row[m] = h.months[i].qty;
                 });
-                row["Total"] = h.total.count;
+                row["Total"] = h.total.qty;
                 return row;
             });
 
             // Add Grand Total row for summary
             const summaryTotal = { "HSN Code": "Total" };
             data.months.forEach((m, i) => {
-                summaryTotal[m] = data.hsnSummary.reduce((sum, h) => sum + h.months[i].count, 0);
+                summaryTotal[m] = data.hsnSummary.reduce((sum, h) => sum + h.months[i].qty, 0);
             });
-            summaryTotal["Total"] = data.hsnSummary.reduce((sum, h) => sum + h.total.count, 0);
+            summaryTotal["Total"] = data.hsnSummary.reduce((sum, h) => sum + h.total.qty, 0);
             summaryRows.push(summaryTotal);
 
             const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-            XLSX.utils.book_append_sheet(workbook, wsSummary, "Count Summary");
+            XLSX.utils.book_append_sheet(workbook, wsSummary, "Quantity Summary");
 
             // 2. Detailed Sheet (Matching User Screenshot Layout)
             const detailedRows = [];
 
             data.hsnSummary.forEach(h => {
-                // Header row for HSN with counts
+                // Header row for HSN with quantities
                 const headerRow = {
-                    "HSN Code": `${h.code} (${h.type})`
+                    "HSN Code": `${h.code} (${h.rate}%) [${h.type}]`
                 };
                 data.months.forEach((m, i) => {
-                    headerRow[m] = h.months[i].count;
+                    headerRow[m] = h.months[i].qty;
                 });
-                headerRow["Total"] = h.total.count;
+                headerRow["Total"] = h.total.qty;
                 detailedRows.push(headerRow);
 
                 // Taxable Value row
