@@ -237,8 +237,7 @@
                     <template x-if="!isSaving">
                         <div class="flex items-center">
                             <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i>
-                            <span
-                                x-text="doc.id ? 'Update & Print PDF' : (doc.isPosted ? 'Print PDF' : 'Post & Save PDF')"></span>
+                            <span x-text="doc.isPosted ? 'Print PDF' : 'Post & Save PDF'"></span>
                         </div>
                     </template>
                     <template x-if="isSaving">
@@ -2700,8 +2699,8 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1"
                                     x-text="doc.type === 'Quotation' ? 'Quotation Date' : (doc.type === 'Proforma Invoice' ? 'Proforma Date' : (doc.type === 'Tax Invoice' ? 'Invoice Date' : 'Challan Date'))"></label>
-                                <input type="date" x-model="doc.date"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <input type="date" x-model="doc.date" :disabled="doc.isPosted"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50">
                             </div>
                         </div>
 
@@ -2709,9 +2708,9 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-600 mb-1">Currency</label>
-                                <select x-model="doc.currency"
+                                <select x-model="doc.currency" :disabled="doc.isPosted"
                                     @change="lucide.createIcons(); if(doc.currency === 'INR') { doc.exchangeRate = 1; doc.bankChargesAmount = 0; } updateSupplyType(); ensureBankExists();"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50">
                                     <template x-for="curr in currencies" :key="curr.code">
                                         <option :value="curr.code"
                                             x-text="curr.code + ' - ' + curr.name + ' (' + curr.symbol + ')'"></option>
@@ -2722,8 +2721,8 @@
                                 x-show="doc.currency !== 'INR' && !['Quotation', 'Proforma Invoice'].includes(doc.type)">
                                 <label class="block text-sm font-medium text-slate-600 mb-1">Ex. Rate (1 FC = ?
                                     INR)</label>
-                                <input type="number" x-model="doc.exchangeRate" step="0.01"
-                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none italic">
+                                <input type="number" x-model="doc.exchangeRate" step="0.01" :disabled="doc.isPosted"
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-slate-100 italic">
                             </div>
                         </div>
 

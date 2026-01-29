@@ -1424,17 +1424,7 @@ function billApp() {
                     created_by: this.user?.id
                 };
 
-                let query;
-                if (this.doc.id) {
-                    // Update existing
-                    payload.id = this.doc.id;
-                    query = window.supabase.from('documents').upsert(payload);
-                } else {
-                    // Insert new
-                    query = window.supabase.from('documents').insert(payload);
-                }
-
-                const { error: saveError } = await query;
+                const { error: saveError } = await window.supabase.from('documents').insert(payload);
                 if (saveError) {
                     console.error('Final save error:', saveError);
                     this.notify('Permanent save failed: ' + saveError.message, 'error');
