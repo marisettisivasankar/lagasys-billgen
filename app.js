@@ -21,6 +21,9 @@ function billApp() {
             monthWiseTrend: [],
             taxSummary: { domestic: 0, export: 0, totalGst: 0, taxableDomestic: 0, taxableExport: 0 },
             topProducts: [],
+            topStates: [],
+            topCountries: [],
+            geoView: 'India', // 'India' or 'World'
             domesticExportSplit: { domesticCount: 0, exportCount: 0 }
         },
         openingBalance: {
@@ -1732,11 +1735,16 @@ function billApp() {
                 ],
                 taxSummary: { domestic: 0, export: 0, totalGst: 0, taxableDomestic: 0, taxableExport: 0 },
                 topProducts: [],
+                topStates: [],
+                topCountries: [],
+                geoView: this.dashboardStats ? this.dashboardStats.geoView : 'India',
                 domesticExportSplit: { domesticCount: 0, exportCount: 0 }
             };
 
             const accountMap = {};
             const productMap = {};
+            const stateMap = {};
+            const countryMap = {};
 
             this.savedDocs.forEach(doc => {
                 const docDate = new Date(doc.date);
@@ -1797,6 +1805,17 @@ function billApp() {
                         const pName = item.desc || 'Unknown Product';
                         productMap[pName] = (productMap[pName] || 0) + amount;
                     });
+
+                    // Geography Data Aggregation
+                    if (isExport) {
+                        const country = doc.account.country || 'International';
+                        countryMap[country] = (countryMap[country] || 0) + taxableVal;
+                    } else {
+                        const state = (doc.account.state || 'Unknown').trim();
+                        if (state) {
+                            stateMap[state] = (stateMap[state] || 0) + taxableVal;
+                        }
+                    }
                 }
 
                 if (doc.type === 'Quotation') newStats.conversion.quotes++;
@@ -1836,6 +1855,14 @@ function billApp() {
                 .map(([name, value]) => ({ name, value }))
                 .sort((a, b) => b.value - a.value).slice(0, 5);
 
+            newStats.topStates = Object.entries(stateMap)
+                .map(([name, value]) => ({ name, value }))
+                .sort((a, b) => b.value - a.value);
+
+            newStats.topCountries = Object.entries(countryMap)
+                .map(([name, value]) => ({ name, value }))
+                .sort((a, b) => b.value - a.value);
+
             if (newStats.conversion.quotes > 0) {
                 newStats.conversion.rate = (newStats.conversion.invoices / newStats.conversion.quotes) * 100;
             }
@@ -1845,7 +1872,62 @@ function billApp() {
             if (types.length > 0 && !types.includes(this.dashboardStats.activeTab)) {
                 this.dashboardStats.activeTab = types[0];
             }
-            this.$nextTick(() => lucide.createIcons());
+            this.$nextTick(() => {
+                lucide.createIcons();
+                this.renderGeoCharts();
+            });
+        },
+
+        renderGeoCharts() {
+            if (!this.showDashboard || !document.getElementById('geo_chart_div')) return;
+
+            if (!window.google || !window.google.charts) return;
+
+            google.charts.load('current', {
+                'packages': ['geochart'],
+            });
+
+            google.charts.setOnLoadCallback(() => {
+                const isIndia = this.dashboardStats.geoView === 'India';
+                const dataArr = isIndia ?
+                    [['State', 'Taxable Value']] :
+                    [['Country', 'Taxable Value']];
+
+                let sourceData = isIndia ? this.dashboardStats.topStates : [...this.dashboardStats.topCountries];
+
+                // For World view, add India total domestic sales
+                if (!isIndia) {
+                    const domesticTotal = this.dashboardStats.topStates.reduce((sum, s) => sum + s.value, 0);
+                    if (domesticTotal > 0) {
+                        sourceData.push({ name: 'India', value: domesticTotal });
+                    }
+                }
+
+                if (sourceData.length === 0) {
+                    // Show empty map or placeholder
+                    dataArr.push([isIndia ? 'India' : 'World', 0]);
+                } else {
+                    sourceData.forEach(item => {
+                        dataArr.push([item.name, item.value]);
+                    });
+                }
+
+                const data = google.visualization.arrayToDataTable(dataArr);
+
+                const options = {
+                    region: isIndia ? 'IN' : 'world',
+                    displayMode: 'regions',
+                    resolution: isIndia ? 'provinces' : 'countries',
+                    colorAxis: { colors: ['#e0f2fe', '#2563eb'] },
+                    backgroundColor: 'transparent',
+                    datalessRegionColor: '#f8fafc',
+                    defaultColor: '#f1f5f9',
+                    tooltip: { textStyle: { color: '#0f172a', fontName: 'Poppins', fontSize: 11, bold: true } }
+                };
+
+                const chart = new google.visualization.GeoChart(document.getElementById('geo_chart_div'));
+                chart.draw(data, options);
+            });
         },
 
         loadDashboard() {

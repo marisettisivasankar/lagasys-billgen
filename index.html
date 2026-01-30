@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 
 <body x-data="billApp()">
@@ -660,6 +661,174 @@
                                 <div class="lg:col-span-5 text-center py-20 text-slate-400 italic">No product
                                     performance data available for this period.</div>
                             </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Geography-Based Insights Section -->
+                <div class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden"
+                    x-effect="dashboardStats.geoView; $nextTick(() => renderGeoCharts())">
+                    <div class="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="p-3 bg-indigo-600 rounded-2xl text-white">
+                                <i data-lucide="map" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-black text-slate-800">Geographic Sales Distribution</h3>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Regional
+                                    Performance Insights</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                            <button @click="dashboardStats.geoView = 'India'"
+                                class="px-6 py-2.5 rounded-xl text-xs font-black transition-all"
+                                :class="dashboardStats.geoView === 'India' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'">
+                                India
+                            </button>
+                            <button @click="dashboardStats.geoView = 'World'"
+                                class="px-6 py-2.5 rounded-xl text-xs font-black transition-all"
+                                :class="dashboardStats.geoView === 'World' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'">
+                                World
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-8">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                            <!-- Map Container -->
+                            <div class="lg:col-span-2 relative">
+                                <div id="geo_chart_div" style="width: 100%; height: 450px;"
+                                    class="rounded-3xl overflow-hidden border border-slate-50">
+                                    <div
+                                        class="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400 italic font-medium">
+                                        <div class="flex flex-col items-center">
+                                            <svg class="animate-spin h-8 w-8 text-blue-500 mb-4" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                    stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                            </svg>
+                                            Initializing Map...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sidebar Lists -->
+                            <div class="space-y-8">
+                                <!-- Top States (India View) -->
+                                <div x-show="dashboardStats.geoView === 'India'"
+                                    x-transition:enter="transition duration-300" class="space-y-4">
+                                    <h4 class="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Top
+                                        Regions (India)</h4>
+                                    <div class="space-y-4 max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                                        <template x-for="(s, idx) in dashboardStats.topStates" :key="idx">
+                                            <div
+                                                class="p-5 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-xl transition-all group">
+                                                <div class="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1"
+                                                            x-text="'Rank #' + (idx + 1)"></p>
+                                                        <h5 class="text-lg font-black text-slate-800" x-text="s.name">
+                                                        </h5>
+                                                    </div>
+                                                    <span class="text-blue-600 font-black text-lg"
+                                                        x-text="formatCurrency(s.value)"></span>
+                                                </div>
+                                                <div class="relative pt-2">
+                                                    <div
+                                                        class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                        <span>Market Share</span>
+                                                        <span
+                                                            x-text="((s.value / (dashboardStats.taxSummary.taxableDomestic || 1)) * 100).toFixed(1) + '%'"></span>
+                                                    </div>
+                                                    <div class="h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-1000"
+                                                            :style="'width: ' + ((s.value / (dashboardStats.taxSummary.taxableDomestic || 1)) * 100) + '%'">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="dashboardStats.topStates.length === 0">
+                                            <div class="py-10 text-center text-slate-400 italic">No domestic sales data.
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Top Countries (World View) -->
+                                <div x-show="dashboardStats.geoView === 'World'"
+                                    x-transition:enter="transition duration-300" class="space-y-4">
+                                    <h4 class="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Global
+                                        Market Distribution</h4>
+                                    <div class="space-y-4 max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
+                                        <!-- India (Domestic) Entry -->
+                                        <template x-if="dashboardStats.taxSummary.taxableDomestic > 0">
+                                            <div
+                                                class="p-5 bg-blue-50/50 rounded-3xl border border-blue-100 hover:bg-white hover:shadow-xl transition-all group">
+                                                <div class="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <p
+                                                            class="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">
+                                                            Domestic Market</p>
+                                                        <h5 class="text-lg font-black text-slate-800">India</h5>
+                                                    </div>
+                                                    <span class="text-blue-600 font-black text-lg"
+                                                        x-text="formatCurrency(dashboardStats.taxSummary.taxableDomestic)"></span>
+                                                </div>
+                                                <div class="relative pt-2">
+                                                    <div
+                                                        class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                        <span>Global Share</span>
+                                                        <span
+                                                            x-text="((dashboardStats.taxSummary.taxableDomestic / (dashboardStats.taxSummary.taxableDomestic + dashboardStats.taxSummary.taxableExport || 1)) * 100).toFixed(1) + '%'"></span>
+                                                    </div>
+                                                    <div class="h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-1000"
+                                                            :style="'width: ' + ((dashboardStats.taxSummary.taxableDomestic / (dashboardStats.taxSummary.taxableDomestic + dashboardStats.taxSummary.taxableExport || 1)) * 100) + '%'">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <!-- Other Countries -->
+                                        <template x-for="(c, idx) in dashboardStats.topCountries" :key="idx">
+                                            <div
+                                                class="p-5 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-xl transition-all group">
+                                                <div class="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1"
+                                                            x-text="'Export Market #' + (idx + 1)"></p>
+                                                        <h5 class="text-lg font-black text-slate-800" x-text="c.name">
+                                                        </h5>
+                                                    </div>
+                                                    <span class="text-indigo-600 font-black text-lg"
+                                                        x-text="formatCurrency(c.value)"></span>
+                                                </div>
+                                                <div class="relative pt-2">
+                                                    <div
+                                                        class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                        <span>Global Share</span>
+                                                        <span
+                                                            x-text="((c.value / (dashboardStats.taxSummary.taxableDomestic + dashboardStats.taxSummary.taxableExport || 1)) * 100).toFixed(1) + '%'"></span>
+                                                    </div>
+                                                    <div class="h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-gradient-to-r from-indigo-600 to-purple-500 rounded-full transition-all duration-1000"
+                                                            :style="'width: ' + ((c.value / (dashboardStats.taxSummary.taxableDomestic + dashboardStats.taxSummary.taxableExport || 1)) * 100) + '%'">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template
+                                            x-if="dashboardStats.topCountries.length === 0 && dashboardStats.taxSummary.taxableDomestic === 0">
+                                            <div class="py-10 text-center text-slate-400 italic">No global sales data.
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
